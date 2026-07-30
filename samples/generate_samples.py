@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import random
+import zlib
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -91,7 +92,10 @@ def month_rows(year: int, month: int) -> list[tuple[date, str, int]]:
 
     for desc, amount, times in RECURRING:
         for i in range(times):
-            day = min(last_day, 1 + (hash(desc) % 26) + i * 12)
+            # crc32, not hash(): the built-in hash is salted per process, so using
+            # it here made the "samples" differ on every run and the overlap count
+            # in the output message change with it.
+            day = min(last_day, 1 + (zlib.crc32(desc.encode()) % 26) + i * 12)
             rows.append((date(year, month, day), desc, amount))
 
     for desc, lo, hi, times in VARIABLE:
