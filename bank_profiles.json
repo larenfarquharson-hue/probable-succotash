@@ -1,0 +1,70 @@
+{
+  "_readme": [
+    "Named column layouts, for when auto-detection gets a file wrong.",
+    "Use with: spendtracker import-statement statement.csv --profile <name>",
+    "",
+    "Column indexes are 0-based positions in the CSV. 'description' may be a",
+    "single index or a list of indexes to join. Set 'outflow_is_negative' to",
+    "false when the file writes money out as a positive number in a single",
+    "amount column. Set 'dayfirst' to false for month-first dates.",
+    "",
+    "IMPORTANT: the entries below are illustrative SHAPES, not verified copies",
+    "of any bank's current export format. Bank exports change without notice.",
+    "Open your own file, count the columns, and confirm before trusting one.",
+    "Auto-detection handles most files correctly and additionally verifies its",
+    "sign inference against the running balance, so try it with no profile",
+    "first."
+  ],
+
+  "profiles": {
+    "signed_amount_with_balance": {
+      "name": "Date, Description, Amount (signed), Balance",
+      "txn_date": 0,
+      "description": [1],
+      "amount": 2,
+      "balance": 3,
+      "outflow_is_negative": true,
+      "dayfirst": true
+    },
+
+    "debit_credit_with_balance": {
+      "name": "Date, Narrative, Debit, Credit, Balance",
+      "txn_date": 0,
+      "description": [1],
+      "debit": 2,
+      "credit": 3,
+      "balance": 4,
+      "dayfirst": true
+    },
+
+    "split_description_no_balance": {
+      "name": "Date, Reference, Details, Amount - month-first dates",
+      "txn_date": 0,
+      "description": [1, 2],
+      "amount": 3,
+      "outflow_is_negative": true,
+      "dayfirst": false
+    },
+
+    "outflows_written_positive": {
+      "name": "Payments-only export where money out is a positive number",
+      "txn_date": 0,
+      "description": [1],
+      "amount": 2,
+      "outflow_is_negative": false,
+      "dayfirst": true
+    },
+
+    "with_posted_date_and_card": {
+      "name": "Transaction date, posted date, description, amount, balance, card",
+      "txn_date": 0,
+      "posted_date": 1,
+      "description": [2],
+      "amount": 3,
+      "balance": 4,
+      "card_last4": 5,
+      "outflow_is_negative": true,
+      "dayfirst": true
+    }
+  }
+}

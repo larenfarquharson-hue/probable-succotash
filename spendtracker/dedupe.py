@@ -389,13 +389,23 @@ def score_receipt_match(
             return 0.0, "dates too far apart"
 
     msim = _merchant_similarity(receipt_merchant, txn_merchant)
+
+    # When both sides name a merchant and the names do not resemble each other,
+    # refuse outright rather than letting a strong amount-and-date score carry it.
+    # An exact amount on the exact day scores 0.85 on its own, which is enough to
+    # attach a slip to a stranger's purchase that happened to cost the same - and
+    # the resulting "detail" would be confidently wrong.
+    both_named = bool(canonical_key(receipt_merchant)) and bool(canonical_key(txn_merchant))
+    if both_named and msim < 0.25:
+        return 0.0, "different merchant"
+
     merchant_score = msim * 0.30
     if msim >= 0.85:
         merchant_reason = "merchant matches"
     elif msim >= 0.4:
         merchant_reason = "merchant similar"
     else:
-        merchant_reason = "merchant unclear"
+        merchant_reason = "merchant not legible on the slip"
 
     card_score = 0.0
     card_reason = ""

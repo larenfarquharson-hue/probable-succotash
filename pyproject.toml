@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spendtracker"
+version = "1.0.0"
+description = "Track every outflow on a bank account from statement CSVs and till slips, without double counting."
+requires-python = ">=3.10"
+dependencies = [
+    "Flask>=3.0,<4.0",
+    "python-dateutil>=2.8",
+]
+
+[project.optional-dependencies]
+# AI-powered till-slip reading. Everything else works without it.
+ai = ["anthropic>=0.40", "Pillow>=10.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+spendtracker = "spendtracker.cli:main"
+
+[tool.setuptools]
+packages = ["spendtracker", "spendtracker.ingest", "spendtracker.web"]
+
+[tool.setuptools.package-data]
+"spendtracker.web" = ["templates/*.html", "static/*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:spendtracker.*"]

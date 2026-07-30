@@ -106,12 +106,20 @@ def _normalise_separators(s: str) -> str:
     if has_dot:
         parts = s.split(".")
         if len(parts) > 2:
-            # 1.234.567 -> thousands separators
+            # "1.234.567" - multiple groups can only be thousands separators.
             return s.replace(".", "")
-        # Ambiguous case "1.234": treat as thousands only if exactly 3 decimals
-        # and the integer part is short, which is the European convention.
-        if len(parts) == 2 and len(parts[1]) == 3 and len(parts[0]) <= 3:
-            return s.replace(".", "")
+        # A single dot is treated as a decimal point, always.
+        #
+        # "1.500" is genuinely ambiguous in isolation: 1500 in European notation,
+        # 1.50 in ours. Guessing by digit-group length is worse than useless -
+        # it silently turned "0.005" into 5.00 and would misread "12.500" by a
+        # factor of a thousand. Since this function sees one value at a time with
+        # no file context, the honest choice is the far more common convention,
+        # and to let the importer catch the other case: a genuinely European
+        # export is checked against its own running balance, where a 1000x error
+        # collapses the agreement and raises a warning instead of passing
+        # quietly. Such exports also almost always write the decimal comma
+        # ("1.500,00"), which the both-separators branch above handles correctly.
         return s
 
     return s
