@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Dashboard · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Where the money went</h1>
+
+{% if not has_data %}
+  <div class="empty">
+    <strong>Nothing imported yet.</strong>
+    Add a bank statement CSV to get started — the app works out the layout itself.
+    <p><a class="btn" href="{{ url_for('upload') }}">Add a statement</a></p>
+    <p class="small">Want to try it first? Run <code>python samples/generate_samples.py</code>
+      and upload the files it writes to <code>samples/</code>.</p>
+  </div>
+{% else %}
+
+{{ m.period_bar(period, 'dashboard') }}
+
+{% set rec = s.reconciliation %}
+
+<div class="tiles">
+  {{ m.tile('Total out of the account', s.total_outflow_cents|money,
+            'every cent the bank shows leaving') }}
+  {{ m.tile('Actual spending', s.spend_cents|money,
+            'excludes ' ~ s.excluded_cents|money ~ ' of transfers and savings') }}
+  {{ m.tile('Discretionary', s.discretionary_cents|money,
+            s.discretionary_share|pct0 ~ ' of spending') }}
+  {{ m.tile('Money in', s.total_inflow_cents|money,
+            'net ' ~ s.net_cents|money) }}
+  {{ m.tile('Transactions', s.transaction_count,
+            (s.spend_per_month_cents|money ~ ' per month') if period.days > 45 else None) }}
+</div>
+
+<h2>Can these numbers be trusted?</h2>
+<div class="card">
+  {% if rec.residual_cents == 0 %}
+    <div class="note ok">
+      <span class="icon" aria-hidden="true">✓</span>
+      <span><strong>The breakdown adds up to the bank's own total, to the cent.</strong>
+        Every {{ symbol }} below is accounted for in a category.</span>
+    </div>
+  {% else %}
+    <div class="note bad">
+      <span class="icon" aria-hidden="true">✕</span>
+      <span><strong>The breakdown does not reconcile</strong> —
+        {{ rec.residual_cents|abs|money }} is unaccounted for. This is a bug; please
+        report it rather than trusting the figures.</span>
+    </div>
+  {% endif %}
+
+  <div class="tiles" style="margin-top:0.7rem">
+    {{ m.tile('Days covered by a statement',
+              rec.days_covered ~ ' / ' ~ rec.days_in_period,
+              'gaps mean spend is missing entirely' if rec.coverage_gaps else 'no gaps') }}
+    {{ m.tile('Outflows explained', rec.explained_share|pct0,
+              'the rest is cash with no slip, or uncategorised') }}
+    {{ m.tile('Cash with no till slip', rec.cash_unexplained_cents|money,
+              'counted in the total, but cannot be broken down') }}
+    {{ m.tile('Held as duplicates', rec.held_duplicates_cents|money,
+              rec.pending_review_count ~ ' awaiting your decision') }}
+  </div>
+
+  {% if rec.balances_agree is not none %}
+    <div class="note {{ 'ok' if rec.balances_agree else 'warn' }}" style="margin-top:0.7rem">
+      <span class="icon" aria-hidden="true">{{ '✓' if rec.balances_agree else '!' }}</span>
+      <span>{% if rec.balances_agree %}The imported rows reproduce the statement's own
+        closing balance, so no rows were dropped.{% else %}The imported rows do not
+        reproduce the statement's closing balance — rows may have been skipped.{% endif %}</span>
+    </div>
+  {% endif %}
+
+  {% for warning in rec.warnings %}
+    <div class="note warn">
+      <span class="icon" aria-hidden="true">!</span>
+      <span>{{ warning }}</span>
+    </div>
+  {% endfor %}
+</div>
+
+<h2>By type of spend</h2>
+<div class="card">
+  {{ m.kind_legend() }}
+  {% set biggest = s.by_category|map(attribute='total_cents')|max if s.by_category else 1 %}
+  <div class="barlist">
+    {% for b in s.by_category if b.total_cents > 0 %}
+      {{ m.bar_row(
+           b.name,
+           b.total_cents|money,
+           b.total_cents / biggest,
+           share=b.share,
+           kind=b.kind,
+           href=url_for('transactions', category=b.name, period=period_arg),
+           tip=b.count ~ ' transaction(s), average ' ~ b.average_cents|money
+               ~ (', largest ' ~ b.largest_cents|money)
+               ~ ((' · ' ~ b.from_cash_slips_cents|money ~ ' revealed by cash slips') if b.from_cash_slips_cents else '')
+               ~ (' · not counted as spending' if b.kind in ('excluded', 'income') else '')) }}
+    {% endfor %}
+  </div>
+  <p class="small muted" style="margin-top:0.9rem">
+    Bar length is the amount; every bar shares one colour because the number is what
+    varies, not the meaning. The dot marks essential versus discretionary.
+    Percentages are of actual spending ({{ s.spend_cents|money }}), so transfers and
+    savings do not dilute them.
+  </p>
+</div>
+
+<div class="grid-cards" style="margin-top:1rem">
+  <div>
+    <h2 style="margin-top:0">Top merchants</h2>
+    <div class="card">
+      {% set mbig = s.by_merchant|map(attribute='total_cents')|max if s.by_merchant else 1 %}
+      <div class="barlist">
+        {% for b in s.by_merchant[:14] %}
+          {{ m.bar_row(b.name, b.total_cents|money, b.total_cents / mbig,
+               share=b.share, kind=b.kind,
+               href=url_for('merchant', name=b.name, period=period_arg),
+               tip=b.count ~ ' transaction(s), average ' ~ b.average_cents|money) }}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2 style="margin-top:0">How the money left</h2>
+    <div class="card">
+      {% set tbig = s.by_type|map(attribute='total_cents')|max if s.by_type else 1 %}
+      <div class="barlist">
+        {% for b in s.by_type %}
+          {{ m.bar_row(b.name, b.total_cents|money, b.total_cents / tbig,
+               tip=b.count ~ ' transaction(s)') }}
+        {% endfor %}
+      </div>
+      <p class="small muted" style="margin-top:0.8rem">
+        “Other / unclassified” means the bank's wording did not say how the payment was
+        made. The amount is still counted and categorised.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% if trend|length > 1 %}
+<h2>Month on month</h2>
+<div class="card">
+  <div class="legend">
+    <span class="key"><span class="swatch essential" aria-hidden="true"></span> Essential</span>
+    <span class="key"><span class="swatch discretionary" aria-hidden="true"></span> Discretionary</span>
+  </div>
+  <div class="months plot">
+    {% for p in trend %}
+      <div class="month">
+        <span class="tip">{{ p.period.label }}: {{ p.spend_cents|money }}
+          (essential {{ p.essential_cents|money }}, discretionary {{ p.discretionary_cents|money }})</span>
+        <span class="seg discretionary"
+              style="height: {{ (p.discretionary_cents / peak_month * 100)|round(2) }}%"></span>
+        <span class="seg essential"
+              style="height: {{ (p.essential_cents / peak_month * 100)|round(2) }}%"></span>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="months">
+    {% for p in trend %}
+      <div class="month"><span class="mlabel">{{ p.period.start.strftime('%b %y') }}</span></div>
+    {% endfor %}
+  </div>
+  <div class="table-wrap" style="margin-top:1rem">
+    <table>
+      <caption class="small muted" style="text-align:left; padding:0.4rem 0.7rem">
+        The same figures as a table.
+      </caption>
+      <thead><tr><th>Month</th><th class="num">Spending</th><th class="num">Essential</th>
+        <th class="num">Discretionary</th><th class="num">Money in</th></tr></thead>
+      <tbody>
+        {% for p in trend %}
+          <tr>
+            <td>{{ p.period.label }}</td>
+            <td class="num">{{ p.spend_cents|money }}</td>
+            <td class="num">{{ p.essential_cents|money }}</td>
+            <td class="num">{{ p.discretionary_cents|money }}</td>
+            <td class="num">{{ p.inflow_cents|money }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

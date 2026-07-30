@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Till slips · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Till slips</h1>
+<p class="subtitle">Slips explain what money bought. They never add to your spending
+  total — that comes only from the bank.</p>
+
+<div class="period-bar">
+  <span class="label">Show</span>
+  <a href="{{ url_for('receipts_page') }}" class="{{ 'active' if not status }}">All ({{ counts.values()|sum }})</a>
+  <a href="{{ url_for('receipts_page', status='matched') }}" class="{{ 'active' if status == 'matched' }}">Matched to a bank row ({{ counts.get('matched', 0) }})</a>
+  <a href="{{ url_for('receipts_page', status='cash_allocated') }}" class="{{ 'active' if status == 'cash_allocated' }}">Paid from cash ({{ counts.get('cash_allocated', 0) }})</a>
+  <a href="{{ url_for('receipts_page', status='unmatched') }}" class="{{ 'active' if status == 'unmatched' }}">Unexplained ({{ counts.get('unmatched', 0) }})</a>
+  <a href="{{ url_for('receipts_page', status='ignored') }}" class="{{ 'active' if status == 'ignored' }}">Dismissed ({{ counts.get('ignored', 0) }})</a>
+</div>
+
+{% if counts.get('unmatched') %}
+  <div class="note warn">
+    <span class="icon" aria-hidden="true">!</span>
+    <span><strong>{{ counts.get('unmatched') }} slip(s) could not be tied to any bank row.</strong>
+      They are excluded from your totals on purpose — counting them could double up on
+      money the bank already showed. Usually this means a statement is missing, the slip
+      was paid by someone else, or it was cash that never came out of this account.</span>
+  </div>
+{% endif %}
+
+{% if not rows %}
+  <div class="empty">
+    <strong>No slips here yet.</strong>
+    Photograph a till slip and upload it — the app reads the merchant, date, total and
+    line items, then ties it to the matching bank transaction.
+    <p><a class="btn" href="{{ url_for('upload') }}">Add slips</a></p>
+  </div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>#</th><th>Date</th><th>Merchant</th><th class="num">Total</th><th>Paid by</th>
+      <th>Status</th><th>Bank row</th><th>Read by</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td><a href="{{ url_for('receipt_detail', receipt_id=r.id) }}">{{ r.id }}</a></td>
+          <td>{{ r.receipt_date or '—' }}</td>
+          <td>{{ r.merchant_norm or r.merchant_raw or 'unknown' }}</td>
+          <td class="num">{{ r.total_cents|money if r.total_cents is not none else '—' }}</td>
+          <td class="small">{{ r.tender_type }}</td>
+          <td>
+            {% if r.link_status == 'matched' %}<span class="badge good">matched</span>
+            {% elif r.link_status == 'cash_allocated' %}<span class="badge good">from cash</span>
+            {% elif r.link_status == 'ignored' %}<span class="badge">dismissed</span>
+            {% else %}<span class="badge warn">unexplained</span>{% endif %}
+          </td>
+          <td class="small muted">
+            {% if r.t_date %}{{ r.t_date }} · {{ (-r.t_amt)|money }}{% else %}—{% endif %}
+          </td>
+          <td class="small muted">{{ r.extractor or '—' }}{% if r.confidence is not none %}
+            ({{ (r.confidence * 100)|round|int }}%){% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

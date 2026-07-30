@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}spendtracker{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="{{ url_for('dashboard') }}">spendtracker <span>· {{ cfg.currency_code }}</span></a>
+    <nav class="main">
+      {% set page = request.endpoint %}
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if page == 'dashboard' }}">Dashboard</a>
+      <a href="{{ url_for('transactions') }}" class="{{ 'active' if page in ('transactions', 'merchant') }}">Transactions</a>
+      <a href="{{ url_for('advice_page') }}" class="{{ 'active' if page == 'advice_page' }}">Reduce spend</a>
+      <a href="{{ url_for('recurring_page') }}" class="{{ 'active' if page == 'recurring_page' }}">Recurring</a>
+      <a href="{{ url_for('receipts_page') }}" class="{{ 'active' if page in ('receipts_page', 'receipt_detail') }}">Till slips{% if unmatched_receipts %}<span class="pill">{{ unmatched_receipts }}</span>{% endif %}</a>
+      <a href="{{ url_for('review') }}" class="{{ 'active' if page == 'review' }}">Review{% if pending_reviews %}<span class="pill">{{ pending_reviews }}</span>{% endif %}</a>
+      <a href="{{ url_for('categorise_page') }}" class="{{ 'active' if page == 'categorise_page' }}">Categorise{% if uncategorised_count %}<span class="pill">{{ uncategorised_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('upload') }}" class="{{ 'active' if page == 'upload' }}">Add data</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="note {{ 'warn' if category == 'warn' else 'ok' }}">
+          <span class="icon" aria-hidden="true">{{ '!' if category == 'warn' else '✓' }}</span>
+          <span>{{ message }}</span>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

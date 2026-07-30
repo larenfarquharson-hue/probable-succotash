@@ -1,0 +1,68 @@
+{# Shared building blocks. #}
+
+{% macro period_bar(period, endpoint) %}
+<div class="period-bar">
+  <span class="label">Period</span>
+  {% for value, label in period_presets %}
+    <a href="{{ url_for(endpoint, period=value, **kwargs) }}"
+       class="{{ 'active' if period_arg == value }}">{{ label }}</a>
+  {% endfor %}
+  <form method="get" action="{{ url_for(endpoint, **kwargs) }}">
+    <input type="text" name="period" value="{{ period_arg }}"
+           placeholder="2026-03 · 2026-Q1 · a:b" size="16"
+           aria-label="Custom period">
+    <button type="submit">Go</button>
+  </form>
+</div>
+<p class="subtitle">Showing <strong>{{ period.label }}</strong>
+  ({{ period.start }} to {{ period.end }}, {{ period.days }} days)</p>
+{% endmacro %}
+
+
+{% macro tile(label, value, note=None, hero=False) %}
+<div class="tile {{ 'hero' if hero }}">
+  <div class="tile-label">{{ label }}</div>
+  <div class="tile-value">{{ value }}</div>
+  {% if note %}<div class="tile-note">{{ note }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+
+{#
+  A magnitude bar row. One hue for every bar: the length is the value and the
+  label is the identity, so hue would carry no information. `kind` drives a small
+  identity dot (essential / discretionary), which is the only place colour means
+  something here.
+#}
+{% macro bar_row(name, value_text, fraction, share=None, kind=None, tip=None, href=None, count=None) %}
+<div class="barrow">
+  {% if tip %}<span class="tip">{{ tip }}</span>{% endif %}
+  <span class="name">
+    {% if kind %}<span class="kind-dot {{ kind }}" aria-hidden="true"></span>{% endif %}
+    <span class="text">{% if href %}<a href="{{ href }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</span>
+  </span>
+  <span class="value">{{ value_text }}{% if share is not none %}<span class="share">{{ share|pct }}</span>{% endif %}</span>
+  <span class="track">
+    <span class="fill {{ kind or '' }}" style="width: {{ (fraction * 100)|round(2) }}%"></span>
+  </span>
+</div>
+{% endmacro %}
+
+
+{% macro kind_legend() %}
+<div class="legend">
+  <span class="key"><span class="swatch essential" aria-hidden="true"></span> Essential</span>
+  <span class="key"><span class="swatch discretionary" aria-hidden="true"></span> Discretionary</span>
+  <span class="key"><span class="swatch" style="background: var(--border-strong)" aria-hidden="true"></span> Not spending (transfers, savings)</span>
+</div>
+{% endmacro %}
+
+
+{% macro category_select(name='category', selected=None, blank_label=None) %}
+<select name="{{ name }}" aria-label="Category">
+  {% if blank_label %}<option value="">{{ blank_label }}</option>{% endif %}
+  {% for c in all_categories %}
+    <option value="{{ c }}" {{ 'selected' if c == selected }}>{{ c }}</option>
+  {% endfor %}
+</select>
+{% endmacro %}

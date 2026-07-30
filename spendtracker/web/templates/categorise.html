@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Categorise · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Uncategorised merchants</h1>
+<p class="subtitle">Assign each one once. A rule is created for that merchant, so every
+  future import picks it up automatically.</p>
+
+{% if not rows %}
+  <div class="note ok">
+    <span class="icon" aria-hidden="true">✓</span>
+    <span>Everything is categorised. Nothing is sitting in “Uncategorised” dragging your
+      breakdown down.</span>
+  </div>
+{% else %}
+  <div class="note warn">
+    <span class="icon" aria-hidden="true">!</span>
+    <span>{{ rows|length }} merchant(s) worth
+      {{ rows|sum(attribute='total')|money }} have no category. They are still counted in
+      your totals, but they cannot be broken down or assessed for savings.</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Merchant</th><th>Example description</th><th class="num">Total</th>
+        <th class="num">Count</th><th>Assign</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td><strong>{{ r.m }}</strong></td>
+            <td class="desc small muted">{{ r.sample }}</td>
+            <td class="num">{{ r.total|money }}</td>
+            <td class="num">{{ r.n }}</td>
+            <td>
+              <form method="post" action="{{ url_for('set_txn_category', txn_id=r.example) }}"
+                    style="display:flex; gap:0.3rem; align-items:center">
+                {{ m.category_select('category', None, 'Choose…') }}
+                <input type="hidden" name="learn" value="1">
+                <button type="submit" class="primary">Save</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin-top:0.6rem">
+    Saving sets the category on the example transaction and creates the merchant rule. To
+    apply it to the other rows for the same merchant, run
+    <code>spendtracker categorise --reclassify</code>, which never overwrites a choice you
+    made yourself.
+  </p>
+{% endif %}
+{% endblock %}

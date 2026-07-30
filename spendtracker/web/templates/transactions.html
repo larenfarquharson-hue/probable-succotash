@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Transactions · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Transactions</h1>
+<p class="subtitle">{{ rows|length }} row(s){% if rows|length == row_limit %}
+  — the newest {{ row_limit }}; narrow the period or search to see the rest{% endif %},
+  {{ total|money }} of outflows.</p>
+
+<div class="period-bar">
+  <form method="get" action="{{ url_for('transactions') }}"
+        style="margin-left:0; display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center; width:100%">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="Search description or merchant" size="26">
+    {{ m.category_select('category', filters.category, 'Any category') }}
+    <select name="direction" aria-label="Direction">
+      <option value="out" {{ 'selected' if filters.direction == 'out' }}>Money out</option>
+      <option value="in" {{ 'selected' if filters.direction == 'in' }}>Money in</option>
+      <option value="all" {{ 'selected' if filters.direction == 'all' }}>Both</option>
+    </select>
+    <select name="status" aria-label="Status">
+      <option value="active" {{ 'selected' if filters.status == 'active' }}>Counted</option>
+      <option value="duplicate" {{ 'selected' if filters.status == 'duplicate' }}>Held as duplicate</option>
+      <option value="ignored" {{ 'selected' if filters.status == 'ignored' }}>Ignored</option>
+      <option value="" {{ 'selected' if not filters.status }}>Any status</option>
+    </select>
+    <input type="text" name="period" value="{{ period_arg }}" placeholder="Period" size="13">
+    {% if filters.merchant %}<input type="hidden" name="merchant" value="{{ filters.merchant }}">{% endif %}
+    <button type="submit" class="primary">Filter</button>
+    <a class="btn" href="{{ url_for('transactions') }}">Clear</a>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>Date</th><th>Merchant</th><th>Description</th><th class="num">Amount</th>
+      <th class="num">Balance</th><th>Category</th><th>Slips</th>
+    </tr></thead>
+    <tbody>
+      {% for t in rows %}
+        <tr>
+          <td>{{ t.txn_date }}</td>
+          <td><a href="{{ url_for('merchant', name=t.merchant_norm or 'Unknown') }}">{{ t.merchant_norm or 'Unknown' }}</a></td>
+          <td class="desc small muted">{{ t.description_raw }}</td>
+          <td class="num">{{ (-t.amount_cents)|money if t.amount_cents < 0 else ('+' ~ t.amount_cents|money) }}</td>
+          <td class="num muted">{{ t.balance_cents|money if t.balance_cents is not none else '—' }}</td>
+          {# Only uncategorised rows get the full picker. Rendering a 36-option
+             select on every one of 500 rows made this page ten times heavier for
+             no benefit; categorised rows show the value with a details toggle. #}
+          <td>
+            {% if not t.category or t.category == 'Uncategorised' %}
+              <form method="post" action="{{ url_for('set_txn_category', txn_id=t.id) }}"
+                    style="display:flex; gap:0.25rem; align-items:center">
+                {{ m.category_select('category', None, 'Choose…') }}
+                <input type="hidden" name="learn" value="1">
+                <button type="submit" class="primary" title="Save, and apply to this merchant in future">Set</button>
+              </form>
+            {% else %}
+              <a href="{{ url_for('merchant', name=t.merchant_norm or 'Unknown') }}"
+                 title="Change it on the merchant page">{{ t.category }}</a>
+              {%- if t.category_source == 'user' %} <span class="small muted">· yours</span>
+              {%- elif t.category_source == 'receipt' %} <span class="small muted">· from slip</span>{% endif %}
+            {% endif %}
+          </td>
+          <td>
+            {% if t.receipts %}<span class="badge good">{{ t.receipts }}</span>
+            {% else %}<span class="muted small">—</span>{% endif %}
+            {% if t.status == 'duplicate' %}<span class="badge warn">held</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      {% if not rows %}
+        <tr><td colspan="7" class="muted">No transactions match these filters.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+<p class="small muted" style="margin-top:0.6rem">
+  Changing a category also creates a rule for that merchant, so future imports pick it up.
+</p>
+{% endblock %}

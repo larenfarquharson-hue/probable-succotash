@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Add data · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Add data</h1>
+<p class="subtitle">Bank statements are the source of truth for what left your account.
+  Till slips explain what the money bought — they never add to your totals.</p>
+
+{% if results %}
+  <h2 style="margin-top:0">Results</h2>
+  {% for r in results %}
+    <div class="note {{ 'ok' if r.ok else 'bad' }}">
+      <span class="icon" aria-hidden="true">{{ '✓' if r.ok else '✕' }}</span>
+      <span>
+        <strong>{{ r.name }}</strong> — {{ r.message }}
+        {% if r.period %}<br><span class="small muted">covering {{ r.period }},
+          outflows {{ r.outflow|money }}</span>{% endif %}
+        {% if r.receipt_id %}<br><a class="small" href="{{ url_for('receipt_detail', receipt_id=r.receipt_id) }}">open receipt #{{ r.receipt_id }}</a>{% endif %}
+        {% for note in r.notes if note %}<br><span class="small muted">{{ note }}</span>{% endfor %}
+      </span>
+    </div>
+    {% for w in r.warnings %}
+      <div class="note warn"><span class="icon" aria-hidden="true">!</span><span>{{ w }}</span></div>
+    {% endfor %}
+  {% endfor %}
+{% endif %}
+
+<div class="two-col">
+  <div>
+    <h2>Bank statement CSVs</h2>
+    <div class="card">
+      <form method="post" enctype="multipart/form-data" class="stack">
+        <input type="hidden" name="kind" value="statement">
+        <label>Files (several at once is fine)
+          <input type="file" name="files" accept=".csv,.txt,text/csv" multiple required>
+        </label>
+        <label>Account
+          <input type="text" name="account" list="account-list" value="{{ accounts[0] }}"
+                 placeholder="Main Account">
+        </label>
+        <datalist id="account-list">
+          {% for a in accounts %}<option value="{{ a }}">{% endfor %}
+        </datalist>
+        <div class="row-actions"><button type="submit" class="primary">Import statements</button></div>
+      </form>
+      <p class="small muted" style="margin-top:0.8rem">
+        The layout is detected automatically: preamble rows, header wording, one signed
+        amount column or separate debit/credit columns, day-first or month-first dates.
+        Where the file has a running balance, the amount signs are checked against it and
+        corrected if the convention is inverted.
+      </p>
+      <p class="small muted">
+        Re-importing an overlapping date range is safe. Identical rows are recognised and
+        skipped; anything the data cannot prove either way goes to
+        <a href="{{ url_for('review') }}">Review</a> and is held out of your totals until
+        you decide.
+      </p>
+    </div>
+  </div>
+
+  <div>
+    <h2>Till slip photos</h2>
+    <div class="card">
+      <form method="post" enctype="multipart/form-data" class="stack">
+        <input type="hidden" name="kind" value="receipt">
+        <label>Images ({{ image_types|join(', ') }})
+          <input type="file" name="files" accept="image/*" multiple required>
+        </label>
+        <label>Account
+          <input type="text" name="account" list="account-list" value="{{ accounts[0] }}">
+        </label>
+        <div class="row-actions"><button type="submit" class="primary">Read slips</button></div>
+      </form>
+      <p class="small muted" style="margin-top:0.8rem">
+        Slip reader: <strong>{{ cfg.ocr_provider }}</strong>{% if cfg.ocr_provider == 'claude' %}
+        ({{ cfg.ocr_model }}){% endif %}.
+        {% if cfg.ocr_provider == 'claude' and not cfg.anthropic_api_key %}
+          <br><strong>No <code>ANTHROPIC_API_KEY</code> is set</strong>, so slips will be
+          stored without being read and you will need to type the details in.
+        {% endif %}
+      </p>
+      <p class="small muted">
+        A slip is matched to the bank row it belongs to. If it was paid in cash, it is
+        allocated against a cash withdrawal the bank already counted — which reveals what
+        the cash bought without inventing a second outflow. Uploading the same photo twice
+        does nothing.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% if statements %}
+<h2>Statements imported so far</h2>
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>File</th><th>Account</th><th>Period</th><th class="num">Rows in</th>
+      <th class="num">Duplicates</th><th class="num">Skipped</th><th>Imported</th>
+    </tr></thead>
+    <tbody>
+      {% for st in statements %}
+        <tr>
+          <td>{{ st.filename }}</td>
+          <td>{{ st.account }}</td>
+          <td class="small">{{ st.period_start or '—' }} → {{ st.period_end or '—' }}</td>
+          <td class="num">{{ st.rows_imported }}</td>
+          <td class="num">{{ st.rows_duplicate }}</td>
+          <td class="num">{{ st.rows_skipped }}</td>
+          <td class="small muted">{{ st.imported_at }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

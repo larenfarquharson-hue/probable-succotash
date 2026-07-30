@@ -1,0 +1,555 @@
+/* spendtracker styles.
+ *
+ * Colour decisions, and why:
+ *
+ * The category and merchant bars encode ONE measure (rand spent) across many
+ * named rows. That is a magnitude encoding, not an identity one - the bar length
+ * carries the value and the row label carries the identity - so every bar gets
+ * the same accent hue. Painting 35 categories in 35 hues would be decoration
+ * that no colourblind-safety check could pass, and would imply a meaning the
+ * colours do not have.
+ *
+ * The one place colour genuinely carries identity is essential vs discretionary,
+ * which is two series and gets a legend.
+ *
+ * Both palettes were validated with the dataviz validator (lightness band,
+ * chroma floor, adjacent-pair CVD separation for protanopia/deuteranopia/
+ * tritanopia, normal-vision floor, contrast against the surface) and pass all
+ * checks in both modes. Dark mode is separately stepped from the same hues, not
+ * an automatic inversion of the light values.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --surface: #fcfcfb;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f4f2;
+  --border: #dfdfda;
+  --border-strong: #c4c4bd;
+
+  --ink: #1a1a19;
+  --ink-secondary: #55554f;
+  --ink-muted: #7a7a72;
+
+  /* Series (validated pair) */
+  --series-essential: #1f6feb;
+  --series-discretionary: #b8570f;
+  /* Magnitude bars use the primary accent */
+  --bar: #1f6feb;
+  --bar-track: #ebebe6;
+
+  /* Status - reserved, never reused as a series colour */
+  --status-good: #1a7f37;
+  --status-warning: #9a6700;
+  --status-critical: #b42318;
+  --status-good-bg: #e8f3ec;
+  --status-warning-bg: #fdf3e2;
+  --status-critical-bg: #fceceb;
+
+  --radius: 8px;
+  --radius-bar: 4px;
+  --gap: 2px;
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1a1a19;
+    --surface-raised: #232322;
+    --surface-sunken: #131312;
+    --border: #35352f;
+    --border-strong: #4a4a43;
+
+    --ink: #f2f2ee;
+    --ink-secondary: #b9b9b1;
+    --ink-muted: #8d8d85;
+
+    --series-essential: #4f95e8;
+    --series-discretionary: #c9762f;
+    --bar: #4f95e8;
+    --bar-track: #2c2c2a;
+
+    --status-good: #4ac26b;
+    --status-warning: #d4a72c;
+    --status-critical: #f07167;
+    --status-good-bg: #1b2a20;
+    --status-warning-bg: #2b2417;
+    --status-critical-bg: #2d1c1b;
+  }
+}
+
+/* The viewer's explicit choice must win in both directions. */
+:root[data-theme="dark"] {
+  --surface: #1a1a19;
+  --surface-raised: #232322;
+  --surface-sunken: #131312;
+  --border: #35352f;
+  --border-strong: #4a4a43;
+  --ink: #f2f2ee;
+  --ink-secondary: #b9b9b1;
+  --ink-muted: #8d8d85;
+  --series-essential: #4f95e8;
+  --series-discretionary: #c9762f;
+  --bar: #4f95e8;
+  --bar-track: #2c2c2a;
+  --status-good: #4ac26b;
+  --status-warning: #d4a72c;
+  --status-critical: #f07167;
+  --status-good-bg: #1b2a20;
+  --status-warning-bg: #2b2417;
+  --status-critical-bg: #2d1c1b;
+}
+
+:root[data-theme="light"] {
+  --surface: #fcfcfb;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f4f2;
+  --border: #dfdfda;
+  --border-strong: #c4c4bd;
+  --ink: #1a1a19;
+  --ink-secondary: #55554f;
+  --ink-muted: #7a7a72;
+  --series-essential: #1f6feb;
+  --series-discretionary: #b8570f;
+  --bar: #1f6feb;
+  --bar-track: #ebebe6;
+  --status-good: #1a7f37;
+  --status-warning: #9a6700;
+  --status-critical: #b42318;
+  --status-good-bg: #e8f3ec;
+  --status-warning-bg: #fdf3e2;
+  --status-critical-bg: #fceceb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--surface);
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--series-essential); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ------------------------------------------------------------------ nav --- */
+
+header.topbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.topbar-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  align-items: center;
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-size: 1.02rem;
+}
+.brand span { color: var(--ink-muted); font-weight: 400; }
+
+nav.main { display: flex; flex-wrap: wrap; gap: 0.15rem; }
+
+nav.main a {
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  color: var(--ink-secondary);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+nav.main a:hover { background: var(--surface-sunken); text-decoration: none; }
+nav.main a.active { background: var(--surface-sunken); color: var(--ink); font-weight: 600; }
+
+.pill {
+  display: inline-block;
+  min-width: 1.15rem;
+  padding: 0 0.32rem;
+  margin-left: 0.3rem;
+  border-radius: 999px;
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4rem;
+  /* `clip` rather than `hidden`: it stops a tooltip near the right edge from
+     giving the whole page a horizontal scrollbar, without turning main into a
+     scroll container (which would break the sticky header and anchor jumps).
+     Wide tables still scroll inside their own .table-wrap. */
+  overflow-x: clip;
+}
+
+h1 { font-size: 1.4rem; margin: 0 0 0.2rem; letter-spacing: -0.015em; }
+h2 { font-size: 1.05rem; margin: 1.9rem 0 0.6rem; letter-spacing: -0.01em; }
+h3 { font-size: 0.94rem; margin: 0 0 0.4rem; }
+.subtitle { color: var(--ink-muted); margin: 0 0 1.2rem; font-size: 0.92rem; }
+
+/* --------------------------------------------------------------- period --- */
+
+.period-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1.4rem;
+}
+.period-bar .label { color: var(--ink-muted); font-size: 0.85rem; margin-right: 0.2rem; }
+.period-bar a {
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--ink-secondary);
+  border: 1px solid transparent;
+}
+.period-bar a:hover { background: var(--surface-raised); text-decoration: none; }
+.period-bar a.active {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+.period-bar form { margin-left: auto; display: flex; gap: 0.35rem; }
+
+input[type="text"], input[type="date"], input[type="file"], select {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--series-essential);
+  outline-offset: 1px;
+}
+
+button, .btn {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+button:hover, .btn:hover { background: var(--surface-sunken); text-decoration: none; }
+button.primary {
+  background: var(--series-essential);
+  border-color: var(--series-essential);
+  color: #fff;
+  font-weight: 600;
+}
+button.primary:hover { filter: brightness(1.08); }
+button.danger { color: var(--status-critical); border-color: var(--status-critical); }
+
+/* ------------------------------------------------------------ stat tiles --- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 0.4rem;
+}
+
+.tile {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 0.9rem;
+}
+.tile .tile-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  color: var(--ink-muted);
+  margin-bottom: 0.3rem;
+}
+.tile .tile-value {
+  font-size: 1.5rem;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.tile .tile-note { font-size: 0.8rem; color: var(--ink-muted); margin-top: 0.2rem; }
+.tile.hero .tile-value { font-size: 2rem; }
+
+/* --------------------------------------------------------------- charts --- */
+
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+  margin: 0 0 0.7rem;
+  font-size: 0.82rem;
+  color: var(--ink-secondary);
+}
+.legend .key { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend .swatch {
+  width: 10px; height: 10px; border-radius: 3px; display: inline-block;
+}
+.swatch.essential { background: var(--series-essential); }
+.swatch.discretionary { background: var(--series-discretionary); }
+
+/* Horizontal magnitude bars. Thin marks, rounded data-end, anchored left. */
+.barlist { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.barrow { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 0.8rem; position: relative; }
+
+.barrow .name {
+  font-size: 0.89rem;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.barrow .name .text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.barrow .value {
+  font-size: 0.89rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);          /* value text wears ink, never the series colour */
+  white-space: nowrap;
+}
+.barrow .value .share { color: var(--ink-muted); margin-left: 0.4rem; font-size: 0.82rem; }
+
+.track {
+  grid-column: 1 / -1;
+  height: 8px;
+  background: var(--bar-track);
+  border-radius: var(--radius-bar);
+  overflow: hidden;
+  display: flex;
+  gap: var(--gap);            /* 2px surface gap between adjacent fills */
+}
+.fill {
+  height: 100%;
+  background: var(--bar);
+  border-radius: var(--radius-bar);
+  min-width: 2px;
+}
+.fill.essential { background: var(--series-essential); }
+.fill.discretionary { background: var(--series-discretionary); }
+.fill.excluded { background: var(--border-strong); }
+
+/* Identity dot next to a category name: essential vs discretionary. */
+.kind-dot {
+  width: 8px; height: 8px; border-radius: 999px; flex: 0 0 auto;
+}
+.kind-dot.essential { background: var(--series-essential); }
+.kind-dot.discretionary { background: var(--series-discretionary); }
+.kind-dot.excluded { background: var(--border-strong); }
+.kind-dot.cash { background: var(--series-discretionary); opacity: 0.55; }
+.kind-dot.income { background: var(--status-good); }
+
+/* Hover layer: an HTML chart should say more on hover.
+ *
+ * An absolutely positioned tooltip still contributes to the document's scroll
+ * width even at opacity 0, so an unconstrained `nowrap` tip silently makes the
+ * whole page scroll sideways on a phone. Hence the max-width, the wrap once
+ * capped, and no tips at all where there is no hover to trigger them. */
+.barrow .tip, .month .tip {
+  max-width: min(320px, calc(100vw - 3rem));
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.barrow .tip {
+  position: absolute;
+  left: 0; bottom: calc(100% - 0.1rem);
+  z-index: 10;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.79rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms ease-out;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.22);
+}
+.barrow:hover .tip, .barrow:focus-within .tip { opacity: 1; }
+
+@media (hover: none) {
+  .barrow .tip, .month .tip { display: none; }
+}
+
+/* Month columns.
+ *
+ * align-items must stay `stretch` (the default). Setting it to flex-end shrinks
+ * each column to its content height, which leaves the segments' percentage
+ * heights resolving against zero and the whole chart rendering as flat lines. */
+.months { display: flex; align-items: stretch; gap: 0.5rem; padding-top: 0.5rem; }
+/* Compound selector: the element carries both classes (class="months plot"),
+   so a descendant selector here would silently never match. */
+.months.plot { height: 160px; }
+.month {
+  /* Capped so a two- or three-month view shows bars, not giant slabs. */
+  flex: 1 1 0;
+  max-width: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--gap);
+  min-width: 0;
+  position: relative;
+}
+.month .seg { border-radius: var(--radius-bar); min-height: 2px; flex: 0 0 auto; }
+.month .seg.essential { background: var(--series-essential); }
+.month .seg.discretionary { background: var(--series-discretionary); border-radius: var(--radius-bar); }
+.month .mlabel {
+  font-size: 0.72rem; color: var(--ink-muted); text-align: center;
+  margin-top: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.month .tip {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(100% + 0.25rem);
+  background: var(--ink); color: var(--surface); font-size: 0.78rem;
+  padding: 0.3rem 0.5rem; border-radius: 6px;
+  width: max-content;
+  opacity: 0; pointer-events: none; z-index: 10;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.22);
+}
+.month:hover .tip { opacity: 1; }
+/* Anchor the outermost columns' tooltips inward so they stay on screen. */
+.month:first-child .tip { left: 0; transform: none; }
+.month:last-child .tip { left: auto; right: 0; transform: none; }
+
+/* --------------------------------------------------------------- tables --- */
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; background: var(--surface-raised); }
+th, td { padding: 0.45rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); }
+th {
+  font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ink-muted); font-weight: 600;
+  background: var(--surface-sunken); position: sticky; top: 0;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--surface-sunken); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.mono { font-family: var(--mono); font-size: 0.82rem; }
+td.desc { max-width: 380px; }
+.muted { color: var(--ink-muted); }
+.small { font-size: 0.82rem; }
+
+/* --------------------------------------------------------------- status --- */
+
+.note {
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 0.55rem;
+  font-size: 0.89rem;
+  align-items: flex-start;
+}
+.note .icon { flex: 0 0 auto; font-weight: 700; line-height: 1.45; }
+.note.ok { background: var(--status-good-bg); border-color: var(--status-good); color: var(--ink); }
+.note.ok .icon { color: var(--status-good); }
+.note.warn { background: var(--status-warning-bg); border-color: var(--status-warning); color: var(--ink); }
+.note.warn .icon { color: var(--status-warning); }
+.note.bad { background: var(--status-critical-bg); border-color: var(--status-critical); color: var(--ink); }
+.note.bad .icon { color: var(--status-critical); }
+.note.plain { background: var(--surface-sunken); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 0.28rem;
+  font-size: 0.76rem; font-weight: 600;
+  padding: 0.08rem 0.42rem; border-radius: 999px;
+  border: 1px solid var(--border-strong); color: var(--ink-secondary);
+  white-space: nowrap;
+}
+.badge.good { color: var(--status-good); border-color: var(--status-good); background: var(--status-good-bg); }
+.badge.warn { color: var(--status-warning); border-color: var(--status-warning); background: var(--status-warning-bg); }
+.badge.bad  { color: var(--status-critical); border-color: var(--status-critical); background: var(--status-critical-bg); }
+
+/* ------------------------------------------------------------- findings --- */
+
+.finding {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.7rem;
+  background: var(--surface-raised);
+}
+.finding-head { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: baseline; }
+.finding-head .title { font-weight: 620; font-size: 0.98rem; flex: 1 1 260px; }
+.finding-head .save {
+  font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap;
+}
+.finding p { margin: 0.45rem 0 0; color: var(--ink-secondary); font-size: 0.9rem; }
+.finding .assumption { font-size: 0.83rem; color: var(--ink-muted); font-style: italic; }
+.finding details { margin-top: 0.5rem; font-size: 0.84rem; }
+.finding summary { cursor: pointer; color: var(--ink-muted); }
+.finding ul { margin: 0.35rem 0 0; padding-left: 1.1rem; color: var(--ink-secondary); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+
+@media (max-width: 760px) {
+  .two-col, .grid-cards { grid-template-columns: 1fr; }
+  .period-bar form { margin-left: 0; width: 100%; }
+  td.desc { max-width: 200px; }
+}
+
+/* ------------------------------------------------------------- receipts --- */
+
+.slip-img {
+  max-width: 100%; height: auto; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface-sunken);
+}
+form.stack { display: flex; flex-direction: column; gap: 0.6rem; }
+form.stack label { font-size: 0.85rem; color: var(--ink-secondary); display: flex;
+                   flex-direction: column; gap: 0.2rem; }
+.row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+
+.empty {
+  text-align: center; padding: 2.5rem 1rem; color: var(--ink-muted);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+}
+.empty strong { color: var(--ink); display: block; margin-bottom: 0.3rem; font-size: 1rem; }
+code {
+  font-family: var(--mono); font-size: 0.85em;
+  background: var(--surface-sunken); padding: 0.1rem 0.32rem; border-radius: 4px;
+}
