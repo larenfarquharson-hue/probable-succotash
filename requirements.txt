@@ -1,0 +1,9 @@
+Flask>=3.0,<4.0
+python-dateutil>=2.8
+
+# Optional: only needed for AI-powered till-slip reading (OCR_PROVIDER=claude).
+# Everything else in the app works without it.
+anthropic>=0.40
+
+# Dev/test only
+pytest>=8.0
