@@ -434,8 +434,22 @@ def match_receipt(
     rdate = date.fromisoformat(r["receipt_date"]) if r["receipt_date"] else None
     merchant = r["merchant_norm"] or r["merchant_raw"] or ""
     account_id = r["account_id"]
+    tender = (r["tender_type"] or "unknown").lower()
 
-    # --- 1. Try to link to a card / EFT transaction ------------------------
+    # The slip's own tender type decides which explanation to try first, and
+    # that ordering is load-bearing. A slip that says "cash tendered / change
+    # due" was not paid by card, so linking it to a same-amount card row would
+    # attach it to somebody else's purchase - plausible-looking and wrong. Only
+    # if no cash withdrawal can account for it do we fall back to card
+    # matching, on the assumption the tender type was misread.
+    if tender == "cash":
+        cash_result = _try_cash(
+            conn, r, receipt_id, total, rdate, account_id, cash_lookback_days
+        )
+        if cash_result is not None:
+            return _apply_match(conn, receipt_id, cash_result)
+
+    # --- Try to link to a card / EFT transaction ---------------------------
     best: tuple[float, str, int] | None = None
     if rdate is not None:
         lo = (rdate - timedelta(days=3)).isoformat()
@@ -483,57 +497,77 @@ def match_receipt(
 
     if best is not None:
         score, reason, txn_id = best
+        if tender == "cash":
+            reason = (
+                f"{reason}; note the slip says cash but no cash withdrawal could account "
+                "for it, so it was linked to this card row instead - check this is right"
+            )
         return _apply_match(
             conn, receipt_id, ReceiptMatch(txn_id, score, reason, link_status="matched")
         )
 
-    # --- 2. Cash: allocate against withdrawals the bank already counted ----
-    tender = (r["tender_type"] or "unknown").lower()
-    if tender in ("cash", "unknown") and rdate is not None:
-        allocations = allocate_cash(
-            conn,
-            receipt_id=receipt_id,
-            amount_cents=total,
-            on_or_before=rdate,
-            lookback_days=cash_lookback_days,
-            account_id=account_id,
+    # --- Cash: allocate against withdrawals the bank already counted -------
+    if tender in ("unknown", "voucher"):
+        cash_result = _try_cash(
+            conn, r, receipt_id, total, rdate, account_id, cash_lookback_days
         )
-        allocated = sum(cents for _, cents in allocations)
-        if allocated >= total:
-            return _apply_match(
-                conn,
-                receipt_id,
-                ReceiptMatch(
-                    None,
-                    0.8,
-                    f"paid in cash from {len(allocations)} withdrawal(s) already in the ledger",
-                    link_status="cash_allocated",
-                    allocations=allocations,
-                ),
-            )
-        if allocated > 0:
-            return _apply_match(
-                conn,
-                receipt_id,
-                ReceiptMatch(
-                    None,
-                    0.5,
-                    (
-                        f"only {allocated / 100:.2f} of {total / 100:.2f} could be traced to a "
-                        "cash withdrawal - the rest has no source in the imported statements"
-                    ),
-                    link_status="cash_allocated",
-                    allocations=allocations,
-                ),
-            )
+        if cash_result is not None:
+            return _apply_match(conn, receipt_id, cash_result)
 
-    # --- 3. Genuinely unexplained -----------------------------------------
+    # --- Genuinely unexplained --------------------------------------------
     reason = (
         "no bank transaction matches this slip. It may be on a statement you have not "
         "imported yet, paid by someone else, or paid in cash that was never withdrawn "
         "from this account."
     )
     return _apply_match(conn, receipt_id, ReceiptMatch(None, 0.0, reason))
+
+
+def _try_cash(
+    conn: sqlite3.Connection,
+    receipt_row: sqlite3.Row,
+    receipt_id: int,
+    total: int,
+    rdate: date | None,
+    account_id: int | None,
+    lookback_days: int,
+) -> ReceiptMatch | None:
+    """Attempt to account for a slip out of prior cash withdrawals.
+
+    Returns None when nothing could be allocated, so the caller can try another
+    explanation.
+    """
+    if rdate is None:
+        return None
+    allocations = allocate_cash(
+        conn,
+        receipt_id=receipt_id,
+        amount_cents=total,
+        on_or_before=rdate,
+        lookback_days=lookback_days,
+        account_id=account_id,
+    )
+    allocated = sum(cents for _, cents in allocations)
+    if allocated <= 0:
+        return None
+    if allocated >= total:
+        return ReceiptMatch(
+            None,
+            0.8,
+            f"paid in cash from {len(allocations)} withdrawal(s) already in the ledger",
+            link_status="cash_allocated",
+            allocations=allocations,
+        )
+    return ReceiptMatch(
+        None,
+        0.5,
+        (
+            f"only {allocated / 100:.2f} of {total / 100:.2f} could be traced to a cash "
+            "withdrawal - the rest has no source in the imported statements"
+        ),
+        link_status="cash_allocated",
+        allocations=allocations,
+    )
 
 
 def _apply_match(conn: sqlite3.Connection, receipt_id: int, match: ReceiptMatch) -> ReceiptMatch:

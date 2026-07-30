@@ -5,5 +5,9 @@ python-dateutil>=2.8
 # Everything else in the app works without it.
 anthropic>=0.40
 
+# Optional: downscales oversized phone photos before sending them for reading,
+# which cuts the cost per slip. Skipped silently if absent.
+Pillow>=10.0
+
 # Dev/test only
 pytest>=8.0
