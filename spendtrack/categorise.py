@@ -187,7 +187,40 @@ MERCHANT_ALIASES = {
     "the courier guy": "The Courier Guy",
     "postnet": "PostNet",
     "van schaik": "Van Schaik",
+    "shell": "Shell",
+    "engen": "Engen",
+    "sasol": "Sasol",
+    "caltex": "Caltex",
+    "totalenergies": "TotalEnergies",
+    "puma energy": "Puma Energy",
+    "builders warehouse": "Builders Warehouse",
+    "builders express": "Builders",
+    "cashbuild": "Cashbuild",
+    "woolworths": "Woolworths",
+    "checkers": "Checkers",
+    "shoprite": "Shoprite",
+    "clicks": "Clicks",
+    "discovery health": "Discovery Health",
+    "discovery life": "Discovery Life",
+    "discovery insure": "Discovery Insure",
+    "old mutual": "Old Mutual",
+    "sanlam": "Sanlam",
+    "vodacom": "Vodacom",
+    "telkom": "Telkom",
+    "afrihost": "Afrihost",
+    "vumatel": "Vumatel",
+    "netflix": "Netflix",
+    "showmax": "Showmax",
+    "spotify": "Spotify",
+    "virgin active": "Virgin Active",
+    "ocean basket": "Ocean Basket",
+    "wesbank": "WesBank",
 }
+
+# Fuel-forecourt sub-brands: the parent brand is the useful label, so these are
+# treated as generic and the brand scan finds "Shell"/"Engen" in the description.
+GENERIC_FORECOURTS = {"ultra city", "petroport", "on the run", "freshstop",
+                      "fresh stop", "quickshop", "quick shop", "kwikshop"}
 
 _LOCATION_NOISE = {
     "sandton", "rosebank", "randburg", "midrand", "fourways", "bryanston",
@@ -204,6 +237,8 @@ _LOCATION_NOISE = {
     "port", "elizabeth", "london", "george", "knysna", "mosselbay", "paarl",
 }
 
+
+GENERIC_PATTERNS |= GENERIC_FORECOURTS
 
 # Longest first, and only aliases long enough to be unambiguous as whole words.
 _ALIASES_BY_LENGTH = sorted(

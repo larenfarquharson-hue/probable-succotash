@@ -547,6 +547,10 @@ def find_recurring(conn: sqlite3.Connection, period: Period,
 
     groups: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for row in rows:
+        # Cash withdrawals recur, but they are not a commitment to anyone — what
+        # the cash bought is the question, and slips answer it elsewhere.
+        if taxonomy.get(row["category"]).kind == "unknown":
+            continue
         groups[row["description_key"]].append(row)
 
     out: list[dict] = []
@@ -562,8 +566,20 @@ def find_recurring(conn: sqlite3.Connection, period: Period,
         gaps = _month_gaps(months)
         # Monthly-ish means most consecutive appearances are one month apart.
         monthly = gaps and sum(1 for g in gaps if g == 1) >= max(1, len(gaps) // 2)
-        if not monthly or spread > 0.35:
+        if not monthly:
             continue
+        # A commitment happens about once a month. Eight coffees across two
+        # months is a habit, and belongs in the habit insight rather than here —
+        # calling it a recurring charge would inflate "committed annually".
+        cadence = len(entries) / len(months)
+        if cadence > 1.4:
+            continue
+        # Fixed charges barely move: subscriptions, insurance, debit orders.
+        # Variable ones recur monthly but by amount vary: utilities, a monthly
+        # big shop. Both are useful to know, but only fixed ones are commitments.
+        if spread > 0.45:
+            continue
+        fixed = spread <= 0.08
 
         in_period = [e for e in entries
                      if period.start <= e["txn_date"] <= period.end]
@@ -578,6 +594,10 @@ def find_recurring(conn: sqlite3.Connection, period: Period,
             "occurrences": len(entries),
             "months": months,
             "months_seen": len(months),
+            "fixed": fixed,
+            "spread": round(spread, 3),
+            "min_amount": round(min(amounts), 2),
+            "max_amount": round(max(amounts), 2),
             "annualised": round(median * 12, 2),
             "in_period_total": round(sum(abs(float(e["amount"])) for e in in_period), 2),
             "in_period_count": len(in_period),
@@ -830,7 +850,7 @@ def _insight_duplicate_services(report: PeriodReport, claims: _Claims,
     """Overlapping services in one category, paid for in parallel."""
     by_category: dict[str, list[dict]] = defaultdict(list)
     for entry in report.recurring:
-        if taxonomy.get(entry["category"]).discretion >= 0.55:
+        if entry["fixed"] and taxonomy.get(entry["category"]).discretion >= 0.55:
             by_category[entry["category"]].append(entry)
 
     out: list[Insight] = []
@@ -869,7 +889,7 @@ def _insight_duplicate_services(report: PeriodReport, claims: _Claims,
 def _insight_subscriptions(report: PeriodReport, claims: _Claims,
                            cfg: config.Settings) -> list[Insight]:
     subs = [r for r in report.recurring
-            if taxonomy.get(r["category"]).discretion >= 0.55]
+            if r["fixed"] and taxonomy.get(r["category"]).discretion >= 0.55]
     if not subs:
         return []
     claimed = _recurring_rows(claims, {s["key"] for s in subs})
