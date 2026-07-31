@@ -19,6 +19,7 @@ from pathlib import Path
 
 from . import advice as advice_mod
 from . import auth as auth_mod
+from . import tls as tls_mod
 from . import analytics, db as dbmod, taxonomy
 from .config import Config, load_config
 from .dedupe import rematch_all_receipts, resolve_candidate
@@ -601,17 +602,49 @@ def cmd_serve(args, cfg: Config) -> int:
         )
         return 3
 
-    app = create_app(cfg)
+    # Once certificates exist they are used, without needing a flag. Nothing
+    # to remember, and no way to accidentally serve statements in the clear
+    # after having gone to the trouble of setting TLS up.
+    paths = tls_mod.tls_paths(cfg.data_dir)
+    use_tls = paths.ready and not args.no_tls
+    context = None
+    if use_tls:
+        try:
+            context = tls_mod.ssl_context(paths)
+        except tls_mod.TlsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 5
+
+    app = create_app(cfg, secure_cookies=use_tls)
     port = args.port or cfg.web_port
+    scheme = "https" if use_tls else "http"
     shown = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-    print(f"spendtracker running at http://{shown}:{port}  (Ctrl+C to stop)")
+    print(f"spendtracker running at {scheme}://{shown}:{port}  (Ctrl+C to stop)")
     print(f"database: {cfg.db_path}")
+
     if auth_mod.is_loopback(host):
         print("reachable from this machine only; no passphrase needed")
     else:
         print(f"listening on {host} — reachable from your network, passphrase required")
-        print("traffic is NOT encrypted; use only on a network you trust")
-    app.run(host=host, port=port, debug=args.debug)
+        if use_tls:
+            try:
+                info = tls_mod.describe(paths.server_cert)
+                for address in info.addresses:
+                    if address.startswith("127.") or address in ("::1", "0:0:0:0:0:0:0:1"):
+                        continue
+                    print(f"  from your phone:  https://{address}:{port}")
+                if info.expiring_soon:
+                    print(
+                        f"  certificate expires in {info.days_remaining} day(s) — "
+                        "run `spendtracker tls setup --renew`"
+                    )
+            except tls_mod.TlsError:
+                pass
+            print("traffic is encrypted (TLS)")
+        else:
+            print("traffic is NOT encrypted — anyone on this network can read it")
+            print("run `spendtracker tls setup` to fix that")
+    app.run(host=host, port=port, debug=args.debug, ssl_context=context)
     return 0
 
 
@@ -806,6 +839,118 @@ def cmd_passphrase(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_tls(args, cfg: Config) -> int:
+    """Create, inspect or export the certificates for the web UI."""
+    paths = tls_mod.tls_paths(cfg.data_dir)
+
+    if args.tls_action == "status":
+        print(heading("TLS"))
+        if not paths.ready:
+            print("  certificates    none")
+            print("\n  Without them the web UI serves plain HTTP, so anything on")
+            print("  your network can read your statements. Set them up with:")
+            print("\n      spendtracker tls setup")
+            return 0
+        try:
+            server = tls_mod.describe(paths.server_cert)
+            ca = tls_mod.describe(paths.ca_cert)
+        except tls_mod.TlsError as exc:
+            print(f"  error reading certificates: {exc}", file=sys.stderr)
+            return 1
+
+        state = (
+            "EXPIRED" if server.expired
+            else f"{server.days_remaining} day(s) left"
+        )
+        print(f"  server cert     {state}")
+        print(f"  valid until     {server.not_after:%Y-%m-%d}")
+        print(f"  covers          {', '.join(server.hostnames)}")
+        for address in server.addresses:
+            print(f"                  {address}")
+        print(f"  CA expires      {ca.not_after:%Y-%m-%d}")
+        print(f"  files           {paths.root}")
+
+        if server.expired or server.expiring_soon:
+            print("\n  Renew with:  spendtracker tls setup --renew")
+            print("  The CA is unchanged, so devices do not need reinstalling.")
+
+        current = set(tls_mod.local_addresses())
+        missing = current - set(server.addresses)
+        if missing:
+            print(
+                f"\n  This machine now answers on {', '.join(sorted(missing))}, "
+                "which the\n  certificate does not cover. Re-run "
+                "`spendtracker tls setup --renew`."
+            )
+        return 0
+
+    if args.tls_action == "trust-file":
+        if not paths.has_ca:
+            print(
+                "error: no CA yet — run `spendtracker tls setup` first",
+                file=sys.stderr,
+            )
+            return 1
+        target = Path(args.output) if args.output else Path("spendtracker-ca.crt")
+        target.write_bytes(paths.ca_cert.read_bytes())
+        print(f"wrote {target}")
+        print(
+            "\nThis is the public certificate, safe to copy to your devices.\n"
+            "Install it, then browse to the https address shown by `serve`.\n"
+            "\n  iPhone:   AirDrop or email it, open it, then Settings > General >\n"
+            "            VPN & Device Management to install, then Settings >\n"
+            "            General > About > Certificate Trust Settings to enable it.\n"
+            "  Android:  Settings > Security > Encryption & credentials >\n"
+            "            Install a certificate > CA certificate.\n"
+            "  Windows:  double-click, install to 'Trusted Root Certification\n"
+            "            Authorities'.\n"
+            "  macOS:    open in Keychain Access, set to 'Always Trust'.\n"
+            "\nThe private key stays on this machine and must never be copied."
+        )
+        return 0
+
+    # setup / renew
+    if paths.ready and not args.renew:
+        print(
+            "Certificates already exist. Use --renew to issue a fresh server "
+            "certificate\n(the CA is kept, so devices do not need reinstalling), "
+            "or --new-ca to start over."
+        )
+        return 0
+
+    reuse = not args.new_ca
+    try:
+        paths = tls_mod.generate(
+            cfg.data_dir, extra_names=args.name, reuse_ca=reuse
+        )
+    except tls_mod.TlsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    info = tls_mod.describe(paths.server_cert)
+    print(heading("TLS ready"))
+    print(f"  valid until     {info.not_after:%Y-%m-%d}")
+    print(f"  covers          {', '.join(info.hostnames)}")
+    for address in info.addresses:
+        print(f"                  {address}")
+    print(f"  files           {paths.root}")
+
+    if reuse and args.renew:
+        print("\n  Same CA as before, so your devices need no changes.")
+        return 0
+
+    print("\nNext, so your phone trusts it:")
+    print("\n    spendtracker tls trust-file")
+    print("\nThat writes the certificate to install on each device. Then:")
+    print("\n    spendtracker serve --host 0.0.0.0")
+    print(
+        "\nInstalling this CA means the device will trust anything it signs, so "
+        "keep\nthe private key on this machine only. It never needs to be copied "
+        "anywhere."
+    )
+    return 0
+
+
 def cmd_status(args, cfg: Config) -> int:
     conn = open_db(cfg)
     sym = cfg.currency_symbol
@@ -932,6 +1077,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host")
     p.add_argument("--port", type=int)
     p.add_argument("--debug", action="store_true")
+    p.add_argument(
+        "--no-tls",
+        action="store_true",
+        help="serve plain HTTP even when certificates exist (not recommended)",
+    )
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser(
@@ -966,6 +1116,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="set a new one without the current one"
     )
     p.set_defaults(func=cmd_passphrase)
+
+    p = sub.add_parser("tls", help="certificates for serving the web UI over HTTPS")
+    tls_sub = p.add_subparsers(dest="tls_action")
+    p.set_defaults(func=cmd_tls, tls_action="status")
+
+    tp = tls_sub.add_parser("setup", help="create certificates")
+    tp.add_argument("--renew", action="store_true", help="reissue, keeping the CA")
+    tp.add_argument(
+        "--new-ca",
+        action="store_true",
+        help="start over with a new CA (devices must reinstall it)",
+    )
+    tp.add_argument(
+        "--name",
+        action="append",
+        help="extra hostname or IP to cover; repeatable",
+    )
+    tp.set_defaults(func=cmd_tls, tls_action="setup")
+
+    tp = tls_sub.add_parser("status", help="show certificate state and expiry")
+    tp.set_defaults(func=cmd_tls, tls_action="status")
+
+    tp = tls_sub.add_parser(
+        "trust-file", help="export the CA certificate to install on your devices"
+    )
+    tp.add_argument("-o", "--output", help="where to write it")
+    tp.set_defaults(func=cmd_tls, tls_action="trust-file")
 
     p = sub.add_parser("status", help="what has been imported so far")
     p.set_defaults(func=cmd_status)

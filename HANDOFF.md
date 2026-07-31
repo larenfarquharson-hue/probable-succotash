@@ -7,13 +7,13 @@ context.
 
 `main` holds the merged version: the `claude/bank-spending-tracker-d5w9dd`
 build, plus three things ported from the parallel `claude/bank-spending-tracker-3fjs1x`
-prototype. 190 tests pass. There is no half-finished work in the tree and
+prototype. 314 tests pass. There is no half-finished work in the tree and
 nothing is stubbed.
 
 ```bash
 python3 -m spendtracker.cli --help    # no dependencies needed
 ./run.sh demo                          # sets up, loads fictional samples, opens the web UI
-./run.sh test                          # 190 tests
+./run.sh test                          # 314 tests
 ```
 
 ## The merge: what came from the other branch, and what did not
@@ -227,11 +227,9 @@ Supporting choices:
 
 ### What was NOT done, deliberately
 
-- **No TLS.** Certificates on a LAN mean either a self-signed cert (browser
-  warnings on every device, training the user to click through) or a real
-  hostname and ACME. Both are big enough to be their own change. The consequence
-  is documented in three places rather than glossed: the traffic is readable by
-  anyone on the network.
+- ~~**No TLS.**~~ Now implemented — see the TLS section below. The reasoning
+  that made a bare self-signed certificate the wrong answer is preserved there,
+  because it is the part most likely to be "simplified" later.
 - **No CSRF tokens.** `SameSite=Lax` blocks the cross-site POST that CSRF needs,
   and adding tokens would touch every form template. If a route ever needs to
   accept a cross-site POST, this decision has to be revisited.
@@ -260,6 +258,53 @@ day with no data reads as a gap instead of being silently closed up.
 Verified with a headless browser at 390px and 1280px: no horizontal scroll in
 either, no console errors, no requests beyond the file itself, and legible in
 both colour schemes.
+
+## TLS
+
+`tls.py`, added because the passphrase was crossing the network in cleartext.
+
+**The decision most likely to be undone by someone later: a local CA rather than
+one self-signed certificate.** The self-signed route is two lines and encrypts
+just as well. It is still wrong. Every device shows a full-page warning on every
+visit, and the only way through is "proceed anyway" — which trains the user to
+dismiss certificate warnings, the exact reflex a real attack depends on, and
+which verifies nothing, giving encryption without authentication. A passive
+eavesdropper is defeated; an active one is not, and can harvest the passphrase.
+
+If you are tempted to simplify this, that is what you would be trading away.
+
+Supporting choices:
+
+- **Serving uses stdlib `ssl`.** Only *creating* certificates needs help, and
+  that prefers `cryptography` with an `openssl` CLI fallback (present on macOS
+  and Linux, and bundled with Git for Windows). So the zero-dependency promise
+  survives for everything except the one-off setup step.
+- **SANs, not Common Name.** Browsers stopped honouring CN years ago. The
+  certificate lists every address the machine answers on, because the one the
+  phone uses is the LAN address, not loopback.
+- **Server certificates last 397 days**; Apple platforms reject manually trusted
+  leaves that live much longer. Renewal reuses the CA, so devices never need
+  reinstalling — that separation is the entire reason the CA exists as its own
+  key pair.
+- **Certificates are backdated a minute** to absorb clock skew between laptop and
+  phone, which otherwise appears as "certificate not yet valid".
+- **TLS activates automatically once certificates exist.** No flag to remember,
+  and no way to accidentally serve cleartext after having set it up. `--no-tls`
+  is the deliberate escape hatch.
+- **`SESSION_COOKIE_SECURE` tracks the transport** rather than being hardcoded.
+  Setting it on a plain HTTP server would stop the cookie being sent at all,
+  which would look like a broken login.
+
+### Still not done
+
+- **No HTTP-to-HTTPS redirect listener.** Typing `http://` at the TLS port gives
+  a connection reset rather than a helpful redirect. Fixing it means a second
+  listener on a second port; the `serve` banner prints the right URL instead.
+- **No certificate pinning, no revocation.** If the CA key leaks, the remedy is
+  removing the CA from your devices and running `tls setup --new-ca`.
+- **Still Flask's development server.** TLS makes it safe to cross your own
+  network. It does not make this safe to expose to the internet, and nothing
+  here should be read as suggesting otherwise.
 
 ## If you are extending it
 

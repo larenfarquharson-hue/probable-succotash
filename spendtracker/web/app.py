@@ -54,7 +54,12 @@ MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 SESSION_LIFETIME = timedelta(days=14)
 
 
-def create_app(cfg: Config | None = None, *, require_login: bool | None = None) -> Flask:
+def create_app(
+    cfg: Config | None = None,
+    *,
+    require_login: bool | None = None,
+    secure_cookies: bool = False,
+) -> Flask:
     """Build the app.
 
     ``require_login`` forces the login requirement on or off. Left as None it
@@ -80,10 +85,13 @@ def create_app(cfg: Config | None = None, *, require_login: bool | None = None) 
     app.config["SPENDTRACKER_CFG"] = cfg
     app.config["SPENDTRACKER_LOGIN_REQUIRED"] = login_required
     app.config["PERMANENT_SESSION_LIFETIME"] = SESSION_LIFETIME
-    # No Secure flag: there is no TLS, so setting it would stop the cookie
-    # being sent at all. SameSite=Lax is what blocks cross-site form posts.
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Secure is set only when actually serving over TLS. Setting it on a plain
+    # HTTP server would stop the cookie being sent at all, so it tracks the
+    # transport rather than being hardcoded either way.
+    app.config["SESSION_COOKIE_SECURE"] = secure_cookies
+    app.config["SPENDTRACKER_TLS"] = secure_cookies
 
     # ---------------------------------------------------------------- db ---
     def get_db() -> sqlite3.Connection:

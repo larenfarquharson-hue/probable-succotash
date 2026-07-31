@@ -51,6 +51,7 @@ import error, so a bare install is a complete, working tool.
 
 ```bash
 pip install -e '.[web]'    # the web UI:  spendtracker serve
+pip install -e '.[tls]'    # creating HTTPS certificates
 pip install -e '.[ai]'     # AI till-slip reading (sends slip images to Anthropic)
 pip install -e '.[dates]'  # more forgiving date parsing on unusual exports
 pip install -e '.[all]'    # all of the above
@@ -326,6 +327,9 @@ spendtracker categorise  [--reclassify]   review and fix categories
 spendtracker receipts    [--status S]     list and correct stored slips
 spendtracker statements                   every import so far
 spendtracker passphrase                   set the web UI passphrase
+spendtracker tls setup                    certificates for HTTPS
+spendtracker tls status                   what they cover, when they expire
+spendtracker tls trust-file               export the CA to install on devices
 spendtracker undo-import <id>             remove one import entirely
 spendtracker status                       what has been imported so far
 spendtracker serve [--host H]             web interface (needs [web])
@@ -433,23 +437,71 @@ Then find the machine's address (`ipconfig` on Windows, `ip addr` on Linux,
 deliberate: the risk arrives exactly when you leave loopback, so the check lives
 there rather than in a warning that is easy to skip.
 
-### What the passphrase does and does not protect
+### Turn on encryption too
 
-It stops other people on your network from opening the page and reading your
-statements. That is the realistic threat on a home network — a housemate, a
-guest, a compromised smart device.
+The passphrase stops people opening the page. It does not stop anyone watching
+the network from reading what crosses it — including the passphrase itself. Fix
+that once:
 
-It does **not** encrypt anything. There is no TLS, so anyone positioned to watch
-traffic on your network can read both the passphrase and the statement data.
-Practical consequences:
+```bash
+spendtracker tls setup          # create the certificates
+spendtracker tls trust-file     # export the one to install on your devices
+spendtracker serve --host 0.0.0.0
+```
 
-- Use it on a home network you control. Not a café, not a guest network, not the
-  office.
-- Do **not** put it on the internet with ngrok, a Cloudflare tunnel or a port
-  forward. An unauthenticated-looking bank-data endpoint on a public URL gets
-  found by scanners, not by people.
-- The SQLite database is not encrypted at rest either. Anyone who can read your
-  disk does not need the login.
+`serve` now prints an `https://` address. Once certificates exist they are used
+automatically — there is no flag to remember, and no way to accidentally go back
+to serving your statements in the clear.
+
+Install the exported `spendtracker-ca.crt` on each device you use. `trust-file`
+prints the steps for iPhone, Android, Windows and macOS.
+
+### Why a local CA rather than one self-signed certificate
+
+A single self-signed certificate is simpler and would encrypt just as well, but
+every device shows a full-page security warning every time, and the only way in
+is to tap "proceed anyway". That trains you to dismiss certificate warnings —
+which is exactly the reflex a real attack relies on — and dismissing the warning
+means nothing was verified, so you would get encryption without authentication.
+
+A small local CA costs one install per device and gives you no warnings and a
+genuinely authenticated connection.
+
+**The tradeoff, stated plainly:** a device with this CA installed will trust
+anything that CA signs, for any website. If the CA private key were stolen,
+whoever had it could impersonate any site to that device until you removed the
+CA. So the key stays on the machine that generated it, with owner-only
+permissions, and only the *public* certificate from `trust-file` is ever copied
+anywhere. If that tradeoff bothers you — reasonably — the offline HTML report
+needs no certificates at all.
+
+### Certificate maintenance
+
+```bash
+spendtracker tls status              # what is covered, and when it expires
+spendtracker tls setup --renew       # reissue, keeping the CA
+```
+
+Server certificates last about a year, because Apple platforms reject manually
+trusted certificates that live much longer. Renewing keeps the same CA, so your
+devices need no changes. `serve` warns when expiry is near.
+
+If your laptop's IP changes, the certificate no longer matches it — `tls status`
+notices and tells you to renew. A DHCP reservation on your router avoids the
+problem entirely.
+
+Certificate creation needs either the `cryptography` package
+(`pip install 'spendtracker[tls]'`) or `openssl` on your PATH — Git for Windows
+includes one. *Serving* over TLS uses only the standard library.
+
+### What is still not protected
+
+- **The database is not encrypted at rest.** The login and TLS protect the
+  network surface, not the disk. Anyone who can read your drive does not need
+  either.
+- **Do not put this on the internet** with ngrok, a Cloudflare tunnel or a port
+  forward. TLS makes it safe to cross your own network; it does not make a
+  single-user local tool safe to expose publicly.
 
 Passphrases are hashed with scrypt (memory-hard, standard library, so the
 zero-dependency promise survives) and stored in `~/.spendtracker/auth.json` with
@@ -473,9 +525,9 @@ to the machine is already access to the data.
   uploaded statements and slips.
 - The web UI binds to `127.0.0.1` and needs no login there. Serving it to your
   network requires a passphrase, and `serve` refuses to bind beyond localhost
-  without one. See "Reaching it from your phone" above — in particular that
-  there is no TLS, so this is for a home network you trust and never for the
-  internet.
+  without one. Run `spendtracker tls setup` to encrypt the connection as well;
+  once certificates exist they are used automatically. Still a local tool —
+  never expose it to the internet.
 - With `ocr_provider: claude`, slip **images** are sent to Anthropic for reading.
   Statement CSVs are never sent anywhere. Use `tesseract` or `manual` if you
   would rather nothing left the machine.
@@ -522,12 +574,13 @@ Worth knowing before you rely on it:
   doubtful ones.
 - **Transfers between your own accounts** are detected from narration wording. If
   yours is unusual, add a rule.
-- **There is no TLS on the web UI.** The passphrase stops other people on your
-  network from opening the page, but does not encrypt what crosses it. Anyone
-  able to watch the network can read the traffic, so keep it to a network you
-  control and off the public internet.
-- **The database is not encrypted at rest.** The login protects the network
-  surface, not the disk.
+- **TLS is opt-in and uses a local CA.** Run `spendtracker tls setup` before
+  serving to your network, and install the exported certificate on each device.
+  Until you do, traffic is unencrypted.
+- **The database is not encrypted at rest.** The login and TLS protect the
+  network surface, not the disk.
+- **This is still a single-user local tool.** It runs on Flask's development
+  server and is not built to face the public internet, TLS or no TLS.
 
 ## Project layout
 
@@ -544,6 +597,7 @@ spendtracker/
   inspect.py       import preview (dry run) and import undo
   auth.py          web passphrase, signing key, exposure interlock
   report_html.py   self-contained offline report (inline SVG, no requests)
+  tls.py           local CA, certificate issuance, SSL context
   cli.py           command line interface
   ingest/
     csvimport.py   statement layout detection and parsing

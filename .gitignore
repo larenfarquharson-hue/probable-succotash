@@ -10,3 +10,6 @@ uploads/
 config.local.json
 .DS_Store
 samples/statement_*.csv
+tls/
+*.pem
+spendtracker-ca.crt

@@ -21,8 +21,17 @@ web = ["Flask>=3.0,<4.0"]
 dates = ["python-dateutil>=2.8"]
 # AI-powered till-slip reading. Local tesseract and manual entry work without it.
 ai = ["anthropic>=0.40", "Pillow>=10.0"]
-all = ["Flask>=3.0,<4.0", "python-dateutil>=2.8", "anthropic>=0.40", "Pillow>=10.0"]
-dev = ["pytest>=8.0", "Flask>=3.0,<4.0"]
+# Creating TLS certificates. Serving over TLS uses the standard library; only
+# generating certificates needs help, and `openssl` on PATH works instead.
+tls = ["cryptography>=42.0"]
+all = [
+    "Flask>=3.0,<4.0",
+    "python-dateutil>=2.8",
+    "anthropic>=0.40",
+    "Pillow>=10.0",
+    "cryptography>=42.0",
+]
+dev = ["pytest>=8.0", "Flask>=3.0,<4.0", "cryptography>=42.0"]
 
 [project.scripts]
 spendtracker = "spendtracker.cli:main"

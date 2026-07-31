@@ -270,3 +270,34 @@ def test_a_wrong_passphrase_says_nothing_useful(secured) -> None:
     assert "Incorrect passphrase" in body
     for leak in ("characters", "length", "attempts remaining", "close"):
         assert leak not in body.lower()
+
+
+# ---------------------------------------------------------------------------
+# Cookie hardening tracks the transport
+# ---------------------------------------------------------------------------
+
+
+def test_the_cookie_is_not_marked_secure_over_plain_http(populated: Config) -> None:
+    """Secure on an HTTP server would stop the cookie being sent at all."""
+    auth_mod.set_passphrase(auth_mod.load_auth(populated.data_dir), PASSPHRASE)
+    app = create_app(populated, secure_cookies=False)
+    app.config.update(TESTING=True)
+
+    response = app.test_client().post("/login", data={"passphrase": PASSPHRASE})
+    assert "Secure" not in response.headers.get("Set-Cookie", "")
+
+
+def test_the_cookie_is_marked_secure_over_tls(populated: Config) -> None:
+    """Once the transport is encrypted, the cookie must never leak to plain HTTP."""
+    auth_mod.set_passphrase(auth_mod.load_auth(populated.data_dir), PASSPHRASE)
+    app = create_app(populated, secure_cookies=True)
+    app.config.update(TESTING=True)
+
+    cookie = (
+        app.test_client()
+        .post("/login", data={"passphrase": PASSPHRASE})
+        .headers.get("Set-Cookie", "")
+    )
+    assert "Secure" in cookie
+    assert "HttpOnly" in cookie
+    assert "SameSite=Lax" in cookie

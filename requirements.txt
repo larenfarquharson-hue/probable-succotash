@@ -19,5 +19,10 @@ anthropic>=0.40
 # which cuts the cost per slip. Skipped silently if absent.
 Pillow>=10.0
 
+# Creating TLS certificates for `spendtracker tls setup`. Serving over TLS uses
+# the standard library; only certificate creation needs this, and the `openssl`
+# command works instead if you have it.
+cryptography>=42.0
+
 # Dev/test only
 pytest>=8.0
