@@ -20,14 +20,14 @@ _PREFIXES = [
     "magtape debit", "magtape credit", "external debit order",
     "internal debit order", "debit order", "external transfer",
     "electronic payment", "eft payment", "eft debit", "eft credit",
-    "payment to", "payment from", "transfer to", "transfer from",
-    "app payment to", "app transfer to", "banking app payment",
+    "payment to", "payment from", "app payment to", "banking app payment",
     "recurring payment", "scheduled payment", "digital payment",
     "purchase", "payment", "pos",
 ]
-# Deliberately NOT stripped: anything naming a cash withdrawal. "ATM CASH
-# WITHDRAWAL SANDTON CITY" is *about* the withdrawal — strip that and all
-# that remains is a suburb.
+# Deliberately NOT stripped: wording that *is* the meaning rather than the
+# channel. "ATM CASH WITHDRAWAL SANDTON CITY" is about the withdrawal — strip
+# that and only a suburb remains. Likewise "TRANSFER TO SAVINGS" is a transfer,
+# not a purchase at a shop called Savings.
 
 _SUFFIXES = ["za", "zaf", "south africa", "sa"]
 
@@ -108,6 +108,18 @@ def match_text(raw: str) -> str:
     return _SPACES.sub(" ", text).strip()
 
 
+def raw_key(raw: str) -> str:
+    """Lowercase the description with punctuation flattened and nothing removed.
+
+    A second haystack for rule matching. match_text() strips channel prefixes and
+    long digit runs, which is right for merchant recognition but means a
+    user-written regex like `^woef\\s+\\d+` would never see its digits. Patterns
+    are tried against both.
+    """
+    text = _NON_ALNUM.sub(" ", (raw or "").lower())
+    return _SPACES.sub(" ", text).strip()
+
+
 def merchant_key(name: str) -> str:
     """Normalised key for a merchant name, used to compare slips to statements."""
     return description_key(name)
@@ -141,20 +153,30 @@ def file_hash(path: str) -> str:
 
 
 def similarity(left: str, right: str) -> float:
-    """0..1 similarity combining token overlap with character-level ratio.
+    """0..1 similarity between two merchant strings.
 
-    Token overlap catches "CHECKERS SANDTON" vs "CHECKERS HYPER"; the character
-    ratio catches OCR damage like "CHEKERS".
+    Exact token overlap is no good here: OCR turns "CHECKERS" into "CHEKERS" and
+    an exact-match score would collapse. So tokens are aligned to their closest
+    counterpart instead, and the weaker direction is used — that way a short
+    string does not score highly against a long one just by being a substring of
+    one of its words.
     """
     a, b = (left or "").strip(), (right or "").strip()
     if not a or not b:
         return 0.0
     if a == b:
         return 1.0
-    ta, tb = set(a.split()), set(b.split())
-    overlap = len(ta & tb) / len(ta | tb) if (ta | tb) else 0.0
+
+    ta, tb = a.split(), b.split()
+
+    def align(source: list[str], target: list[str]) -> float:
+        scores = [max(SequenceMatcher(None, token, other).ratio() for other in target)
+                  for token in source]
+        return sum(scores) / len(scores) if scores else 0.0
+
+    token_score = min(align(ta, tb), align(tb, ta))
     ratio = SequenceMatcher(None, a, b).ratio()
-    # A containment match ("woolworths" inside "woolworths food sandton") is a
-    # strong signal that raw token overlap understates.
+    # Containment ("woolworths" inside "woolworths food hyde park") is a strong
+    # signal that both of the above understate.
     contained = 1.0 if (a in b or b in a) else 0.0
-    return max(0.6 * overlap + 0.4 * ratio, 0.85 * contained)
+    return max(0.55 * token_score + 0.45 * ratio, 0.85 * contained)

@@ -575,9 +575,10 @@ def find_recurring(conn: sqlite3.Connection, period: Period,
         if cadence > 1.4:
             continue
         # Fixed charges barely move: subscriptions, insurance, debit orders.
-        # Variable ones recur monthly but by amount vary: utilities, a monthly
-        # big shop. Both are useful to know, but only fixed ones are commitments.
-        if spread > 0.45:
+        # Variable ones recur monthly but the amount moves — electricity can
+        # swing by half between summer and winter, and a monthly big shop
+        # likewise. Both are worth knowing; only fixed ones are commitments.
+        if spread > 0.70:
             continue
         fixed = spread <= 0.08
 
@@ -931,7 +932,9 @@ def _insight_small_frequent(claims: _Claims, months: float, cfg: config.Settings
     small = claims.available(
         lambda r: -float(r["amount"]) <= cfg.small_txn_threshold
         and taxonomy.get(r["category"]).discretion >= 0.5)
-    if len(small) < 6:
+    # Four repeats in a period is enough to be a pattern rather than a one-off,
+    # and naming the merchant is more useful than "this category is optional".
+    if len(small) < 4:
         return []
     by_merchant: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for row in small:

@@ -350,6 +350,10 @@ def parse_file(path: Path, profile: dict | None = None,
         header_idx = int(profile["header_row"])
     else:
         header_idx = find_header_row(stripped)
+        if header_idx < 0 and _profile_names_columns(profile):
+            # The profile refers to columns by name, so there must be a header
+            # even though none of its labels are ones we recognise.
+            header_idx = 0
 
     if header_idx >= 0:
         result.header_row = numbered[header_idx][0]
@@ -527,6 +531,15 @@ def _infer_headerless(rows: list[list[str]]) -> ColumnMap:
 
     return ColumnMap(date=date_col, description=desc_cols, amount=amount_col,
                      balance=balance_col)
+
+
+def _profile_names_columns(profile: dict) -> bool:
+    """True when the profile identifies any column by header name rather than index."""
+    for value in (profile.get("columns") or {}).values():
+        items = value if isinstance(value, list) else [value]
+        if any(isinstance(v, str) and not v.isdigit() for v in items):
+            return True
+    return False
 
 
 def _apply_column_overrides(cmap: ColumnMap, overrides: dict,

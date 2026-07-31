@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spendtrack"
+version = "1.0.0"
+description = "Account for every outflow on a bank account from CSV statements and till slips"
+readme = "README.md"
+requires-python = ">=3.11"
+# No runtime dependencies: bank data stays on the machine and the tool stays
+# installable anywhere Python is.
+dependencies = []
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+
+[project.optional-dependencies]
+# Reading slip photos needs the tesseract binary, not a Python package.
+# Install it with your package manager: apt install tesseract-ocr / brew install tesseract
+
+[project.scripts]
+spendtrack = "spendtrack.cli:main"
+
+[tool.setuptools]
+packages = ["spendtrack"]
+
+[tool.setuptools.package-data]
+spendtrack = ["profiles/*.json"]

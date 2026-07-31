@@ -34,6 +34,10 @@ STATUS_MANUAL = "manual_match"
 
 # Minimum confidence to accept an automatic link.
 MATCH_THRESHOLD = 0.68
+# Minimum merchant-name similarity, unless amount and date already agree exactly.
+# Genuine matches score 0.85+; unrelated names sit below 0.30, so this sits in
+# the empty space between them.
+MERCHANT_FLOOR = 0.35
 # How far back a cash slip may look for the withdrawal that funded it.
 CASH_LOOKBACK_DAYS = 31
 CASH_LOOKAHEAD_DAYS = 2
@@ -207,7 +211,7 @@ def _best_transaction(conn: sqlite3.Connection, slip: sqlite3.Row,
         if amount_gap <= cfg.slip_match_amount_tolerance and day_gap == 0:
             score = max(score, 0.70)
 
-        if merchant_score < 0.25 and not (
+        if merchant_score < MERCHANT_FLOOR and not (
                 amount_gap <= cfg.slip_match_amount_tolerance and day_gap <= 1):
             continue
         if score < MATCH_THRESHOLD:

@@ -271,6 +271,9 @@ class _Pattern:
     flags: list[str]
     user: bool
     generic: bool
+    # Higher wins outright, ahead of pattern length. Used where the semantics
+    # beat the merchant name: "REFUND TAKEALOT.COM" is a refund, not shopping.
+    priority: int = 0
 
 
 class Categoriser:
@@ -283,10 +286,11 @@ class Categoriser:
         self._patterns: list[_Pattern] = []
         self._load(user_rules or [], user=True)
         self._load(rules_default.flatten(), user=False)
-        # Specificity order: user rules first, then longer patterns, then
-        # regexes (which are assumed deliberate) ahead of loose substrings.
+        # Specificity order: explicit priority, then user rules, then longer
+        # patterns, then regexes (assumed deliberate) ahead of loose substrings.
         self._patterns.sort(
-            key=lambda p: (p.user, len(p.text), p.regex is not None), reverse=True
+            key=lambda p: (p.priority, p.user, len(p.text), p.regex is not None),
+            reverse=True,
         )
 
     def _load(self, rules: list[dict], user: bool) -> None:
@@ -316,19 +320,21 @@ class Categoriser:
                     flags=list(rule.get("flags") or []),
                     user=user,
                     generic=text in GENERIC_PATTERNS,
+                    priority=int(rule.get("priority") or 0),
                 ))
 
     def classify(self, description: str, amount: float | None = None) -> Assignment:
         """Categorise one description. `amount` refines sign-dependent cases."""
         haystack = normalise.match_text(description)
-        if not haystack:
+        raw = normalise.raw_key(description)
+        if not haystack and not raw:
             return Assignment(merchant=None)
 
         for pat in self._patterns:
             if pat.regex is not None:
-                if not pat.regex.search(haystack):
+                if not (pat.regex.search(haystack) or pat.regex.search(raw)):
                     continue
-            elif pat.text not in haystack:
+            elif pat.text not in haystack and pat.text not in raw:
                 continue
 
             merchant = pat.merchant

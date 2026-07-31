@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import shutil
+from datetime import date
 
-from . import analysis, config, taxonomy
+from . import config
 from .analysis import PeriodReport
 
 BAR_CHARS = "▏▎▍▌▋▊▉█"
@@ -287,11 +288,53 @@ def _wrap(text: str, limit: int) -> list[str]:
 # Smaller renderings used by other commands
 # --------------------------------------------------------------------------
 
+def _comparison_caveats(result: dict, periods: list[str]) -> list[str]:
+    """Warn where a period is short, or its data stops early.
+
+    A full month next to a half month reads as a collapse in spending when it is
+    only a shorter window. Both causes are worth naming: the period itself being
+    shorter, and the statements simply not covering all of it yet.
+    """
+    reports = result.get("reports") or []
+    if not reports:
+        return []
+    notes: list[str] = []
+
+    lengths = [r.period.days for r in reports]
+    if max(lengths) - min(lengths) > 0.2 * max(lengths):
+        notes.append("these periods are different lengths — " + ", ".join(
+            f"{label} {days} days" for label, days in zip(periods, lengths)))
+
+    partial = []
+    for label, report in zip(periods, reports):
+        if not report.daily:
+            continue
+        last = report.daily[-1][0]
+        covered = (date.fromisoformat(last)
+                   - date.fromisoformat(report.period.start)).days + 1
+        if covered < report.period.days * 0.85:
+            partial.append(f"{label} has data only to {last}")
+    if partial:
+        notes.append("; ".join(partial))
+
+    if not notes:
+        return []
+    out = ["Note: " + notes[0] + "."]
+    out += [f"      {note}." for note in notes[1:]]
+    out.append("      Differences below partly reflect that, not only behaviour.")
+    out.append("")
+    return out
+
+
 def render_comparison(result: dict, currency: str = "R", limit: int = 25) -> str:
     periods = result["periods"]
     w = 30 + 14 * len(periods) + 14
     lines = [_rule("=", w), _centre("PERIOD COMPARISON", w), _rule("=", w), ""]
-    header = f"{'Category':<28}" + "".join(f"{p[:12]:>14}" for p in periods) + f"{'Change':>14}"
+
+    lines.extend(_comparison_caveats(result, periods))
+
+    header = (f"{'Category':<28}" + "".join(f"{p[:12]:>14}" for p in periods)
+              + f"{'Change':>14}")
     lines.append(header)
     lines.append(_rule("-", w))
     for row in result["rows"][:limit]:

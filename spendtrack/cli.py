@@ -23,6 +23,12 @@ def main(argv: list[str] | None = None) -> int:
     except (ParseError, ValueError, RuntimeError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except BrokenPipeError:
+        # Something downstream closed the pipe, as `| head` does. Not an error,
+        # but Python will complain at shutdown unless stdout is redirected away.
+        import os
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
     except KeyboardInterrupt:
         print("\ncancelled", file=sys.stderr)
         return 130

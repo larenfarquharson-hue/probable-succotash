@@ -387,6 +387,16 @@ DEFAULT_RULES: list[tuple[str, str, str, list[str], list[str]]] = [
 # fmt: on
 
 
+# Rules whose meaning outranks any merchant name in the same description.
+# "REFUND TAKEALOT.COM" is a refund, not shopping; "TRANSFER TO SAVINGS" is a
+# transfer, not a purchase at a shop called Savings.
+PRIORITIES = {
+    "refunds": 30,
+    "interest-received": 20,
+    "transfer": 10,
+}
+
+
 def flatten() -> list[dict]:
     """Expand the compact table into dicts the rules engine consumes."""
     out: list[dict] = []
@@ -397,5 +407,6 @@ def flatten() -> list[dict]:
             "merchant": merchant,
             "patterns": patterns,
             "flags": list(flags),
+            "priority": PRIORITIES.get(rule_id, 0),
         })
     return out
