@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 from . import advice as advice_mod
+from . import auth as auth_mod
 from . import analytics, db as dbmod, taxonomy
 from .config import Config, load_config
 from .dedupe import rematch_all_receipts, resolve_candidate
@@ -556,6 +557,18 @@ def cmd_receipts(args, cfg: Config) -> int:
 
 
 def cmd_serve(args, cfg: Config) -> int:
+    host = args.host or cfg.web_host
+
+    # The interlock. Binding beyond loopback puts bank statements on the
+    # network, so it requires a passphrase — refusing here is what makes the
+    # unsafe setup unreachable rather than merely discouraged.
+    auth_state = auth_mod.load_auth(cfg.data_dir)
+    try:
+        auth_mod.check_exposure(auth_state, host)
+    except auth_mod.AuthError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 4
+
     try:
         from .web.app import create_app
     except ImportError as exc:  # Flask is an optional extra
@@ -569,10 +582,15 @@ def cmd_serve(args, cfg: Config) -> int:
         return 3
 
     app = create_app(cfg)
-    host = args.host or cfg.web_host
     port = args.port or cfg.web_port
-    print(f"spendtracker running at http://{host}:{port}  (Ctrl+C to stop)")
+    shown = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    print(f"spendtracker running at http://{shown}:{port}  (Ctrl+C to stop)")
     print(f"database: {cfg.db_path}")
+    if auth_mod.is_loopback(host):
+        print("reachable from this machine only; no passphrase needed")
+    else:
+        print(f"listening on {host} — reachable from your network, passphrase required")
+        print("traffic is NOT encrypted; use only on a network you trust")
     app.run(host=host, port=port, debug=args.debug)
     return 0
 
@@ -700,6 +718,71 @@ def cmd_undo_import(args, cfg: Config) -> int:
     inspect_mod.undo_statement(conn, args.statement_id, force=args.force)
     print(f"\n  Removed {plan.transaction_count} transaction(s).")
     conn.close()
+    return 0
+
+
+
+def cmd_passphrase(args, cfg: Config) -> int:
+    """Set, change or clear the web interface passphrase."""
+    import getpass
+
+    state = auth_mod.load_auth(cfg.data_dir)
+
+    if args.clear:
+        if not state.has_passphrase:
+            print("No passphrase is set.")
+            return 0
+        print(
+            "Clearing the passphrase means the web UI can only be served on "
+            "127.0.0.1.\n`serve --host 0.0.0.0` will refuse until you set one again."
+        )
+        if input("Type 'yes' to clear it: ").strip().lower() != "yes":
+            print("Cancelled.")
+            return 0
+        auth_mod.clear_passphrase(state)
+        print("Passphrase cleared.")
+        return 0
+
+    if args.show:
+        print(heading("Web interface access"))
+        print(f"  passphrase set   {'yes' if state.has_passphrase else 'no'}")
+        if state.updated_at:
+            print(f"  last changed     {state.updated_at}")
+        print(f"  credentials file {state.path}")
+        if not state.has_passphrase:
+            print(
+                "\n  Without one, `serve` binds to 127.0.0.1 only. Set a "
+                "passphrase to reach it\n  from your phone on the same network."
+            )
+        return 0
+
+    if state.has_passphrase and not args.force:
+        current = getpass.getpass("Current passphrase: ")
+        if not auth_mod.verify_passphrase(state, current):
+            print("error: incorrect passphrase", file=sys.stderr)
+            return 1
+
+    first = getpass.getpass(
+        f"New passphrase (at least {auth_mod.MIN_PASSPHRASE_LENGTH} characters): "
+    )
+    second = getpass.getpass("Repeat it: ")
+    if first != second:
+        print("error: the two entries do not match", file=sys.stderr)
+        return 1
+
+    try:
+        auth_mod.set_passphrase(state, first)
+    except auth_mod.AuthError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print("\nPassphrase set. You can now serve it to your network:")
+    print("    spendtracker serve --host 0.0.0.0")
+    print(
+        "\nThere is no TLS, so anyone able to watch your network can read the "
+        "traffic.\nUse this on a home network you trust, and never expose it to "
+        "the internet."
+    )
     return 0
 
 
@@ -845,6 +928,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="proceed even when slips are linked to these transactions",
     )
     p.set_defaults(func=cmd_undo_import)
+
+    p = sub.add_parser(
+        "passphrase", help="set the web interface passphrase (needed to serve on a network)"
+    )
+    p.add_argument("--show", action="store_true", help="report whether one is set")
+    p.add_argument("--clear", action="store_true", help="remove it (localhost-only again)")
+    p.add_argument(
+        "--force", action="store_true", help="set a new one without the current one"
+    )
+    p.set_defaults(func=cmd_passphrase)
 
     p = sub.add_parser("status", help="what has been imported so far")
     p.set_defaults(func=cmd_status)

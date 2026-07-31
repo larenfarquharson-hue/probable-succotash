@@ -324,9 +324,10 @@ spendtracker review                       resolve suspected duplicates
 spendtracker categorise  [--reclassify]   review and fix categories
 spendtracker receipts    [--status S]     list and correct stored slips
 spendtracker statements                   every import so far
+spendtracker passphrase                   set the web UI passphrase
 spendtracker undo-import <id>             remove one import entirely
 spendtracker status                       what has been imported so far
-spendtracker serve                        web interface (needs [web])
+spendtracker serve [--host H]             web interface (needs [web])
 ```
 
 Periods accept `2026-03`, `2026-Q1`, `2026`, `this-month`, `last-month`,
@@ -382,13 +383,69 @@ Environment variables, or a gitignored `config.local.json` in the project root:
 
 ---
 
+## Reaching it from your phone
+
+By default the web UI binds to `127.0.0.1`, where only the machine running it
+can reach it, and there is no login — a password guarding a port nobody else can
+open is theatre.
+
+To use it from a phone on the same Wi-Fi, set a passphrase first:
+
+```bash
+spendtracker passphrase
+spendtracker serve --host 0.0.0.0
+```
+
+Then find the machine's address (`ipconfig` on Windows, `ip addr` on Linux,
+`ifconfig` on macOS) and browse to `http://192.168.x.x:5000` from the phone.
+
+**`serve` refuses to bind beyond localhost until a passphrase is set.** That is
+deliberate: the risk arrives exactly when you leave loopback, so the check lives
+there rather than in a warning that is easy to skip.
+
+### What the passphrase does and does not protect
+
+It stops other people on your network from opening the page and reading your
+statements. That is the realistic threat on a home network — a housemate, a
+guest, a compromised smart device.
+
+It does **not** encrypt anything. There is no TLS, so anyone positioned to watch
+traffic on your network can read both the passphrase and the statement data.
+Practical consequences:
+
+- Use it on a home network you control. Not a café, not a guest network, not the
+  office.
+- Do **not** put it on the internet with ngrok, a Cloudflare tunnel or a port
+  forward. An unauthenticated-looking bank-data endpoint on a public URL gets
+  found by scanners, not by people.
+- The SQLite database is not encrypted at rest either. Anyone who can read your
+  disk does not need the login.
+
+Passphrases are hashed with scrypt (memory-hard, standard library, so the
+zero-dependency promise survives) and stored in `~/.spendtracker/auth.json` with
+owner-only permissions. The passphrase itself is never written down. Failed
+logins back off exponentially, so guessing is slow.
+
+```bash
+spendtracker passphrase --show     # is one set?
+spendtracker passphrase --clear    # remove it; localhost-only again
+```
+
+Forgotten it? There is no recovery flow by design — run
+`spendtracker passphrase --force` on the machine itself to set a new one. Access
+to the machine is already access to the data.
+
+---
+
 ## Privacy and safety
 
 - Everything is a local SQLite file in `data/`, which is gitignored along with
   uploaded statements and slips.
-- The web UI binds to `127.0.0.1` and has **no authentication**. It is a
-  single-user local tool. If you expose it beyond localhost, put something that
-  authenticates in front of it.
+- The web UI binds to `127.0.0.1` and needs no login there. Serving it to your
+  network requires a passphrase, and `serve` refuses to bind beyond localhost
+  without one. See "Reaching it from your phone" above — in particular that
+  there is no TLS, so this is for a home network you trust and never for the
+  internet.
 - With `ocr_provider: claude`, slip **images** are sent to Anthropic for reading.
   Statement CSVs are never sent anywhere. Use `tesseract` or `manual` if you
   would rather nothing left the machine.
@@ -435,6 +492,12 @@ Worth knowing before you rely on it:
   doubtful ones.
 - **Transfers between your own accounts** are detected from narration wording. If
   yours is unusual, add a rule.
+- **There is no TLS on the web UI.** The passphrase stops other people on your
+  network from opening the page, but does not encrypt what crosses it. Anyone
+  able to watch the network can read the traffic, so keep it to a network you
+  control and off the public internet.
+- **The database is not encrypted at rest.** The login protects the network
+  surface, not the disk.
 
 ## Project layout
 
@@ -449,6 +512,7 @@ spendtracker/
   advice.py        frivolity scoring and reduction findings (claim ledger)
   periods.py       period shorthand parsing
   inspect.py       import preview (dry run) and import undo
+  auth.py          web passphrase, signing key, exposure interlock
   cli.py           command line interface
   ingest/
     csvimport.py   statement layout detection and parsing

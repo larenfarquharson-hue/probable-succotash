@@ -20,6 +20,11 @@
       <a href="{{ url_for('review') }}" class="{{ 'active' if page == 'review' }}">Review{% if pending_reviews %}<span class="pill">{{ pending_reviews }}</span>{% endif %}</a>
       <a href="{{ url_for('categorise_page') }}" class="{{ 'active' if page == 'categorise_page' }}">Categorise{% if uncategorised_count %}<span class="pill">{{ uncategorised_count }}</span>{% endif %}</a>
       <a href="{{ url_for('upload') }}" class="{{ 'active' if page == 'upload' }}">Add data</a>
+      {% if login_required and authenticated %}
+      <form method="post" action="{{ url_for('logout') }}" class="signout-form">
+        <button type="submit">Sign out</button>
+      </form>
+      {% endif %}
     </nav>
   </div>
 </header>

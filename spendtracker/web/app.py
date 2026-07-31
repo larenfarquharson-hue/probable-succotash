@@ -1,16 +1,21 @@
 """Flask application.
 
-Deliberately a local, single-user tool: it binds to 127.0.0.1 by default and has
-no authentication, because your bank statements should not be on a network
-service. If you expose it beyond localhost, put it behind something that
-authenticates.
+A local, single-user tool. It binds to 127.0.0.1 by default, where the only
+person who can reach it is the one at the keyboard, and in that configuration
+there is no login — a password guarding a port nobody else can open is theatre.
+
+Bind it anywhere else and a passphrase becomes mandatory: `serve` refuses to
+start without one, and every route redirects to /login until you authenticate.
+See spendtracker/auth.py for the reasoning, and for what this does not protect
+against — chiefly that there is no TLS, so use it on a home network you trust
+and never expose it to the internet.
 """
 
 from __future__ import annotations
 
 import sqlite3
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from flask import (
@@ -22,10 +27,12 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 
 from .. import advice as advice_mod
+from .. import auth as auth_mod
 from .. import analytics, db as dbmod, taxonomy
 from ..config import Config, load_config
 from ..dedupe import rematch_all_receipts, resolve_candidate
@@ -44,14 +51,39 @@ from ..periods import Period, parse_period
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 
-def create_app(cfg: Config | None = None) -> Flask:
+SESSION_LIFETIME = timedelta(days=14)
+
+
+def create_app(cfg: Config | None = None, *, require_login: bool | None = None) -> Flask:
+    """Build the app.
+
+    ``require_login`` forces the login requirement on or off. Left as None it
+    follows the stored credentials: a login is required exactly when a
+    passphrase has been set. `serve` refuses to bind off-loopback without one
+    (see auth.check_exposure), so this default is safe.
+    """
     cfg = cfg or load_config()
     cfg.ensure_dirs()
 
+    auth_state = auth_mod.load_auth(cfg.data_dir)
+    login_required = (
+        auth_state.has_passphrase if require_login is None else require_login
+    )
+    throttle = auth_mod.LoginThrottle()
+
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = cfg.secret_key
+    # Prefer the generated key over the config default: the default value is
+    # public in the repository, and a known signing key means forgeable
+    # session cookies.
+    app.config["SECRET_KEY"] = auth_state.secret_key or cfg.secret_key
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
     app.config["SPENDTRACKER_CFG"] = cfg
+    app.config["SPENDTRACKER_LOGIN_REQUIRED"] = login_required
+    app.config["PERMANENT_SESSION_LIFETIME"] = SESSION_LIFETIME
+    # No Secure flag: there is no TLS, so setting it would stop the cookie
+    # being sent at all. SameSite=Lax is what blocks cross-site form posts.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # ---------------------------------------------------------------- db ---
     def get_db() -> sqlite3.Connection:
@@ -126,6 +158,16 @@ def create_app(cfg: Config | None = None) -> Flask:
 
     @app.context_processor
     def inject_globals() -> dict:
+        # An unauthenticated request renders only the login page, which shows
+        # none of these. Skip the queries rather than touching the database on
+        # behalf of someone who has not signed in.
+        if app.config["SPENDTRACKER_LOGIN_REQUIRED"] and not session.get("authenticated"):
+            return {
+                "cfg": cfg,
+                "symbol": cfg.currency_symbol,
+                "login_required": True,
+                "authenticated": False,
+            }
         conn = get_db()
         pending = conn.execute(
             "SELECT COUNT(*) c FROM duplicate_candidates WHERE resolution='pending'"
@@ -140,6 +182,8 @@ def create_app(cfg: Config | None = None) -> Flask:
         return {
             "cfg": cfg,
             "symbol": cfg.currency_symbol,
+            "login_required": app.config["SPENDTRACKER_LOGIN_REQUIRED"],
+            "authenticated": bool(session.get("authenticated")),
             "pending_reviews": pending,
             "unmatched_receipts": unmatched,
             "uncategorised_count": uncategorised,
@@ -154,6 +198,78 @@ def create_app(cfg: Config | None = None) -> Flask:
                 ("all", "Everything"),
             ],
         }
+
+    # ---------------------------------------------------------------- auth --
+    PUBLIC_ENDPOINTS = {"login", "static"}
+
+    @app.before_request
+    def require_authentication():  # noqa: ANN201
+        """Gate everything except the login page itself.
+
+        Fails closed: an unknown endpoint is treated as protected.
+        """
+        if not app.config["SPENDTRACKER_LOGIN_REQUIRED"]:
+            return None
+        if session.get("authenticated") is True:
+            return None
+        if request.endpoint in PUBLIC_ENDPOINTS:
+            return None
+        # Remember where they were headed, but only a path on this site —
+        # taking a full URL here would make an open redirect.
+        # full_path appends a bare "?" when there is no query string.
+        nxt = request.full_path.rstrip("?") if request.method == "GET" else None
+        return redirect(url_for("login", next=nxt) if nxt else url_for("login"))
+
+    def safe_next(target: str | None) -> str:
+        """Only ever redirect to a path on this site."""
+        if not target:
+            return url_for("dashboard")
+        if not target.startswith("/") or target.startswith("//"):
+            return url_for("dashboard")
+        return target
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if not app.config["SPENDTRACKER_LOGIN_REQUIRED"]:
+            return redirect(url_for("dashboard"))
+        if session.get("authenticated") is True:
+            return redirect(url_for("dashboard"))
+
+        who = request.remote_addr or "unknown"
+        wait = throttle.retry_after(who)
+        if request.method == "POST" and wait > 0:
+            flash(
+                f"Too many failed attempts. Try again in {int(wait) + 1} seconds.",
+                "warn",
+            )
+            return render_template("login.html", page="login", locked=True), 429
+
+        if request.method == "POST":
+            attempt = request.form.get("passphrase", "")
+            if auth_mod.verify_passphrase(auth_state, attempt):
+                throttle.record_success(who)
+                session.clear()
+                session["authenticated"] = True
+                session.permanent = True
+                return redirect(safe_next(request.form.get("next")))
+
+            delay = throttle.record_failure(who)
+            # One message for a wrong passphrase whether or not it triggered a
+            # lockout, so the response does not report on the attacker's progress.
+            flash("Incorrect passphrase.", "warn")
+            if delay:
+                flash(f"Further attempts are paused for {int(delay) + 1} seconds.", "warn")
+            return render_template("login.html", page="login", locked=False), 401
+
+        return render_template(
+            "login.html", page="login", locked=False, next=request.args.get("next")
+        )
+
+    @app.post("/logout")
+    def logout():
+        session.clear()
+        flash("Signed out.", "ok")
+        return redirect(url_for("login"))
 
     # -------------------------------------------------------------- routes --
     @app.route("/")

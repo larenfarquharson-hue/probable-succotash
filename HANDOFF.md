@@ -183,13 +183,63 @@ Not oversights — judgement calls, listed so nobody re-litigates them silently:
 
 - **No multi-currency.** One currency per database.
 - **No bank API / screen-scraping integration.** CSV in, by design.
-- **No authentication on the web UI.** It binds to localhost and is a
-  single-user local tool. Adding half-authentication would be worse than none.
+- **No authentication on the web UI *when bound to localhost*.** A password
+  guarding a port only this machine can open is theatre. Authentication now
+  exists, but it activates on exposure rather than by default — see below.
 - **Cash allocation is nearest-withdrawal-first, not a solver.** Totals are
   unaffected; only the timing of the breakdown could be off.
 - **Bank profiles in `bank_profiles.json` are illustrative shapes**, not verified
   copies of any bank's export. Deliberately labelled as such rather than
   presented as authoritative, since I could not verify them.
+
+## Web authentication, and why it works the way it does
+
+Added after the merge, when the app needed to be reachable from a phone.
+
+The design decision worth preserving: **authentication is tied to the bind
+address, not to a config flag.** Serving on loopback needs no passphrase and
+behaves exactly as before. Serving on anything else requires one, and
+`cmd_serve` calls `auth.check_exposure` and exits 4 before Flask ever binds.
+
+The alternative — a `require_auth: true` setting plus a warning in the README —
+was rejected because the failure mode is silent. Someone adds `--host 0.0.0.0`
+to reach it from a phone, it works, and their bank statements are on the network
+with nothing in the way. Tying the check to the bind address makes the unsafe
+configuration unreachable rather than merely discouraged.
+
+Supporting choices:
+
+- **scrypt from `hashlib`.** bcrypt and argon2 are packages, and the CLI having
+  no dependencies is enforced by `tests/test_no_dependencies.py`. scrypt is
+  memory-hard, unlike a bare SHA-256.
+- **The signing key is generated on first run, not defaulted.** `Config.secret_key`
+  still carries `"dev-only-change-me"`; the app now prefers the generated key from
+  `auth.json`. A default key published in a public repo means anyone can forge a
+  session cookie without knowing the passphrase, so `check_exposure` also refuses
+  to serve off-loopback if the key is still the default.
+- **Throttling is in-memory, per process.** One process serving one person; a
+  shared store would be ceremony. Restarting clears the counters, which is fine —
+  an attacker cannot restart your server.
+- **The context processor short-circuits when unauthenticated**, so a signed-out
+  request does not run dashboard queries on the database.
+- **`next=` is path-only.** Accepting a full URL would turn the login page into
+  an open redirect. `safe_next` rejects anything not starting with a single `/`.
+
+### What was NOT done, deliberately
+
+- **No TLS.** Certificates on a LAN mean either a self-signed cert (browser
+  warnings on every device, training the user to click through) or a real
+  hostname and ACME. Both are big enough to be their own change. The consequence
+  is documented in three places rather than glossed: the traffic is readable by
+  anyone on the network.
+- **No CSRF tokens.** `SameSite=Lax` blocks the cross-site POST that CSRF needs,
+  and adding tokens would touch every form template. If a route ever needs to
+  accept a cross-site POST, this decision has to be revisited.
+- **No user accounts, no password reset.** One user. Recovery is
+  `spendtracker passphrase --force` at the machine, because access to the
+  machine is already access to the data.
+
+If you expose this beyond a trusted LAN, TLS stops being optional.
 
 ## If you are extending it
 

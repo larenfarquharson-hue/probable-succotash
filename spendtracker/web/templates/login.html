@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · spendtracker</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-body">
+
+<main class="login-wrap">
+  <div class="login-card">
+    <h1 class="login-brand">spendtracker</h1>
+    <p class="login-sub">This copy is reachable from your network, so it needs a passphrase.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="note {{ 'warn' if category == 'warn' else 'ok' }}">
+            <span class="icon" aria-hidden="true">{{ '!' if category == 'warn' else '✓' }}</span>
+            <span>{{ message }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('login') }}" class="login-form">
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <label for="passphrase">Passphrase</label>
+      <input
+        type="password"
+        id="passphrase"
+        name="passphrase"
+        autocomplete="current-password"
+        autofocus
+        required
+        {% if locked %}disabled{% endif %}
+      >
+      <button type="submit" class="btn primary" {% if locked %}disabled{% endif %}>
+        Sign in
+      </button>
+    </form>
+
+    <p class="login-foot">
+      Forgotten it? Run <code>spendtracker passphrase</code> on the machine
+      running this to set a new one.
+    </p>
+    <p class="login-warn">
+      This connection is not encrypted. Use it on a network you trust, and never
+      expose it to the internet.
+    </p>
+  </div>
+</main>
+
+</body>
+</html>
