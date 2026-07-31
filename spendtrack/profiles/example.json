@@ -1,0 +1,27 @@
+{
+  "name": "example",
+  "description": "Template showing every option. Copy, rename, and pin only what auto-detection gets wrong.",
+  "_usage": [
+    "Run `spendtrack inspect statement.csv` first. It prints exactly which",
+    "columns and sign convention were detected. Only if something is wrong do",
+    "you need a profile. Save yours to ~/.spendtrack/profiles/<name>.json and",
+    "use it with `spendtrack import statement.csv --profile <name>`.",
+    "No bank-specific profiles ship with SpendTrack: export layouts change and",
+    "a stale profile is worse than detection. Build yours from a real export."
+  ],
+  "encoding": "utf-8-sig",
+  "delimiter": ",",
+  "header_row": 0,
+  "date_format": "%d/%m/%Y",
+  "positive_is": "inflow",
+  "columns": {
+    "date": "Transaction Date",
+    "description": ["Description", "Reference"],
+    "amount": "Amount",
+    "debit": null,
+    "credit": null,
+    "balance": "Balance",
+    "fee": "Fee",
+    "indicator": null
+  }
+}
