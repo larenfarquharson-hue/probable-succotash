@@ -203,6 +203,26 @@ def cmd_report(args, cfg: Config) -> int:
     sym = cfg.currency_symbol
     rec = summary.reconciliation
 
+    if args.html:
+        from . import report_html
+
+        recurring = analytics.find_recurring(conn)
+        try:
+            advice = advice_mod.build_advice(conn, period, cfg=cfg, summary=summary)
+        except Exception:  # advice is a bonus; never let it sink the report
+            advice = None
+
+        document = report_html.render_report(
+            conn, summary, cfg=cfg, advice=advice, recurring=recurring
+        )
+        target = Path(args.html if args.html is not True else "spending-report.html")
+        target.write_text(document, encoding="utf-8")
+        size_kb = target.stat().st_size / 1024
+        print(f"wrote {target}  ({size_kb:.0f} KB)")
+        print("Self-contained: no network needed. Open it on any device.")
+        conn.close()
+        return 0
+
     if args.json:
         payload = analytics.summary_to_dict(summary)
         text = json.dumps(payload, indent=2)
@@ -857,6 +877,14 @@ def build_parser() -> argparse.ArgumentParser:
         const=True,
         metavar="FILE",
         help="emit the report as JSON (to FILE, or stdout if no file given)",
+    )
+    p.add_argument(
+        "--html",
+        nargs="?",
+        const=True,
+        metavar="FILE",
+        help="write a self-contained HTML report you can open offline "
+        "(default: spending-report.html)",
     )
     p.set_defaults(func=cmd_report)
 

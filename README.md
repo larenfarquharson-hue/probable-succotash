@@ -317,6 +317,7 @@ spendtracker import-statement <files...>   import bank statement CSVs
 spendtracker add-receipt <images...>       add till slip photographs
 spendtracker report      [--period P]     breakdown + reconciliation
 spendtracker report --json [FILE]         the same report as JSON
+spendtracker report --html [FILE]         a self-contained offline HTML report
 spendtracker advice      [--period P]     frivolous spend and what to cut
 spendtracker merchants   [--period P]     spend by merchant
 spendtracker recurring   [--all]          subscriptions and repeating charges
@@ -380,6 +381,35 @@ Environment variables, or a gitignored `config.local.json` in the project root:
 | `ANTHROPIC_API_KEY` | unset |
 | `SPENDTRACKER_CURRENCY_SYMBOL` | `R` |
 | `SPENDTRACKER_HOST` / `_PORT` | `127.0.0.1` / `5000` |
+
+---
+
+## An offline snapshot for your phone
+
+The web UI needs the machine running, on the network, with a passphrase typed
+in. Sometimes you just want to look at where the money went.
+
+```bash
+spendtracker report --period 2026-03 --html spending-march.html
+```
+
+One file, about 30 KB. Drop it in OneDrive or Dropbox and open it from the
+phone's Files app: no server, no laptop awake, no network. It makes **no
+external requests at all** — charts are inline SVG, styles are inline, there are
+no scripts and no web fonts. A page holding your bank statement should not phone
+anywhere, and should not stop working when it cannot.
+
+It covers the headline figures, the reconciliation verdict, spending by category
+and merchant, a day-by-day chart, recurring commitments and the reduction
+suggestions. It adapts to phone and desktop widths, follows your device's dark
+mode, and prints sensibly.
+
+It is read-only by design and it is a **snapshot**, not a live view — re-run it
+after importing new statements. Correcting a category or linking a slip needs
+the app itself.
+
+The file contains your statement data in plain text. If you put it in cloud
+storage, that is where your statement data now is.
 
 ---
 
@@ -513,6 +543,7 @@ spendtracker/
   periods.py       period shorthand parsing
   inspect.py       import preview (dry run) and import undo
   auth.py          web passphrase, signing key, exposure interlock
+  report_html.py   self-contained offline report (inline SVG, no requests)
   cli.py           command line interface
   ingest/
     csvimport.py   statement layout detection and parsing

@@ -150,6 +150,22 @@ def test_json_report_needs_no_third_party_packages(
     assert payload["reconciliation"]["reconciles"] is True
 
 
+def test_the_html_report_needs_no_third_party_packages(
+    bare_runner: Path, populated: Path, tmp_path: Path
+) -> None:
+    """This is the offline-snapshot path, so it must work on a bare install."""
+    target = tmp_path / "report.html"
+    result = run_bare(
+        bare_runner, populated, "report", "--period", "2026-01", "--html", str(target)
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert target.exists()
+    document = target.read_text(encoding="utf-8")
+    assert document.startswith("<!DOCTYPE html>")
+    assert "http://" not in document and "https://" not in document
+
+
 def test_serve_without_flask_explains_itself(
     bare_runner: Path, populated: Path
 ) -> None:

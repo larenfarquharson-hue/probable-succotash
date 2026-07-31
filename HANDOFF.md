@@ -241,6 +241,26 @@ Supporting choices:
 
 If you expose this beyond a trusted LAN, TLS stops being optional.
 
+## The offline HTML report
+
+`report_html.py`, added so the report could be read on a phone without the
+laptop being awake. The invariant, which is easy to break by accident: **the
+file makes no external requests.** No CDN, no web fonts, no remote images, no
+scripts. A page holding bank statement data must not phone anywhere, and must
+keep working when it cannot. `tests/test_report_html.py` asserts this by
+scanning the output for absolute URLs — if you add a chart library, that test is
+what fails, and it should be taken as the answer rather than an obstacle.
+
+Charts are therefore hand-drawn SVG. The one non-obvious bit is the donut: a
+category holding 100% of spend cannot be an arc, because the start and end
+points coincide and the path renders as nothing, so that case draws a `<circle>`
+instead. The daily chart positions bars by date rather than array index, so a
+day with no data reads as a gap instead of being silently closed up.
+
+Verified with a headless browser at 390px and 1280px: no horizontal scroll in
+either, no console errors, no requests beyond the file itself, and legible in
+both colour schemes.
+
 ## If you are extending it
 
 Good next steps, roughly by value:
@@ -251,7 +271,8 @@ Good next steps, roughly by value:
    and the switching logic already exist and are tested; what is missing is a
    second account type in the UI and guidance on setting the flag.
 3. **CSV / Excel export of a period report.** All the data is in
-   `PeriodSummary`; this is presentation only.
+   `PeriodSummary`; this is presentation only. `report_html.py` is the model to
+   follow — it takes a `PeriodSummary` and renders, touching nothing else.
 4. **Bulk re-categorisation from the web UI.** The CLI has
    `categorise --reclassify`; the web UI only sets one transaction at a time.
 5. **Real bank profiles.** Verify against actual exports and replace the
