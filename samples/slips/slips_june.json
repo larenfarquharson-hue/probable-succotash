@@ -1,0 +1,82 @@
+[
+  {
+    "merchant": "Checkers Hyper Sandton City",
+    "date": "2026-06-02",
+    "time": "17:42",
+    "total": 1842.66,
+    "tax": 240.35,
+    "payment_method": "card",
+    "card_last4": "8891",
+    "image": "IMG_0231.jpg",
+    "items": [
+      {"description": "Full cream milk 2L", "qty": 2, "unit_price": 32.99, "total": 65.98},
+      {"description": "Chicken breast fillets 1kg", "qty": 1, "unit_price": 129.99, "total": 129.99},
+      {"description": "Coca-Cola 2L", "qty": 4, "unit_price": 24.99, "total": 99.96},
+      {"description": "Castle Lager 6-pack", "qty": 2, "unit_price": 89.99, "total": 179.98},
+      {"description": "Simba chips party pack", "qty": 3, "unit_price": 34.99, "total": 104.97},
+      {"description": "Woolworths ready meal lasagne", "qty": 2, "unit_price": 89.99, "total": 179.98},
+      {"description": "Assorted groceries", "qty": 1, "unit_price": 1081.80, "total": 1081.80}
+    ]
+  },
+  {
+    "merchant": "Woolworths Food Hyde Park",
+    "date": "2026-06-07",
+    "time": "11:20",
+    "total": 643.20,
+    "tax": 83.90,
+    "payment_method": "card",
+    "card_last4": "8891",
+    "items": [
+      {"description": "Free range eggs 18s", "qty": 1, "unit_price": 74.99, "total": 74.99},
+      {"description": "Rocket and parmesan salad", "qty": 2, "unit_price": 54.99, "total": 109.98},
+      {"description": "Sourdough loaf", "qty": 1, "unit_price": 42.99, "total": 42.99},
+      {"description": "Sushi platter", "qty": 1, "unit_price": 149.99, "total": 149.99},
+      {"description": "Groceries balance", "qty": 1, "unit_price": 265.25, "total": 265.25}
+    ]
+  },
+  {
+    "merchant": "Ocean Basket Sandton",
+    "date": "2026-06-05",
+    "time": "19:55",
+    "total": 480.00,
+    "payment_method": "cash",
+    "notes": "Paid cash from the ATM draw on 4 June",
+    "items": [
+      {"description": "Calamari platter", "qty": 2, "unit_price": 189.00, "total": 378.00},
+      {"description": "Soft drinks", "qty": 2, "unit_price": 32.00, "total": 64.00},
+      {"description": "Tip", "qty": 1, "unit_price": 38.00, "total": 38.00}
+    ]
+  },
+  {
+    "merchant": "Sandton Market Butchery",
+    "date": "2026-06-08",
+    "time": "09:15",
+    "total": 620.00,
+    "payment_method": "cash",
+    "items": [
+      {"description": "Beef fillet 1.5kg", "qty": 1, "unit_price": 420.00, "total": 420.00},
+      {"description": "Lamb chops 1kg", "qty": 1, "unit_price": 200.00, "total": 200.00}
+    ]
+  },
+  {
+    "merchant": "Vida e Caffe Rosebank",
+    "date": "2026-06-02",
+    "time": "07:35",
+    "total": 52.00,
+    "payment_method": "card",
+    "card_last4": "8891",
+    "items": [
+      {"description": "Grande cappuccino", "qty": 1, "unit_price": 38.00, "total": 38.00},
+      {"description": "Almond croissant", "qty": 1, "unit_price": 14.00, "total": 14.00}
+    ]
+  },
+  {
+    "merchant": "Rhapsody's Melrose Arch",
+    "date": "2026-06-14",
+    "time": "23:40",
+    "total": 1250.00,
+    "payment_method": "card",
+    "card_last4": "4417",
+    "notes": "Paid on a different bank's card — should not be counted here"
+  }
+]
