@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Recurring · spendtracker{% endblock %}
+
+{% block content %}
+<h1>{{ 'Everything that repeats' if show_all else 'Subscriptions and fixed commitments' }}</h1>
+<p class="subtitle">Detected from the cadence between charges — three or more at a regular
+  interval. {% if not show_all %}Only charges with a stable amount are listed, because a
+  weekly grocery shop repeats just as reliably as Netflix but is not something you can
+  cancel.{% endif %}</p>
+
+<div class="period-bar">
+  <span class="label">Show</span>
+  <a href="{{ url_for('recurring_page') }}" class="{{ 'active' if not show_all }}">Cancellable subscriptions</a>
+  <a href="{{ url_for('recurring_page', all=1) }}" class="{{ 'active' if show_all }}">Everything that repeats</a>
+</div>
+
+<div class="tiles">
+  {{ m.tile('Active commitments', monthly|money, 'per month', hero=True) }}
+  {{ m.tile('Over a year', (monthly * 12)|money) }}
+  {{ m.tile('Count', items|selectattr('still_active')|list|length,
+            (items|rejectattr('still_active')|list|length) ~ ' look cancelled') }}
+</div>
+
+{% if not items %}
+  <div class="note plain" style="margin-top:1rem">
+    <span class="icon" aria-hidden="true">i</span>
+    <span>Nothing detected yet. At least three charges at a regular cadence are needed, so
+      import two or three months of statements first.</span>
+  </div>
+{% else %}
+<div class="card" style="margin-top:1rem">
+  {% set biggest = items|map(attribute='annualised_cents')|max %}
+  <div class="barlist">
+    {% for i in items %}
+      {{ m.bar_row(
+           i.merchant,
+           i.typical_cents|money ~ ' ' ~ i.cadence,
+           i.annualised_cents / biggest,
+           kind=None,
+           href=url_for('merchant', name=i.merchant),
+           tip=i.annualised_cents|money ~ ' a year · ' ~ i.occurrences ~ ' charges · last '
+               ~ i.last_seen ~ (' · looks cancelled' if not i.still_active else '')) }}
+    {% endfor %}
+  </div>
+</div>
+
+<div class="table-wrap" style="margin-top:1rem">
+  <table>
+    <thead><tr><th>Merchant</th><th>Category</th><th>Cadence</th><th class="num">Typical</th>
+      <th class="num">Per month</th><th class="num">Per year</th><th class="num">Charges</th>
+      <th>Last seen</th></tr></thead>
+    <tbody>
+      {% for i in items %}
+        <tr>
+          <td><a href="{{ url_for('merchant', name=i.merchant) }}">{{ i.merchant }}</a>
+            {% if not i.still_active %}<span class="badge">may be cancelled</span>{% endif %}
+            {% if i.amount_varies %}<span class="badge warn">amount varies</span>{% endif %}</td>
+          <td class="small">{{ i.category }}</td>
+          <td class="small">{{ i.cadence }}</td>
+          <td class="num">{{ i.typical_cents|money }}</td>
+          <td class="num">{{ i.monthly_equivalent_cents|money }}</td>
+          <td class="num">{{ i.annualised_cents|money }}</td>
+          <td class="num">{{ i.occurrences }}</td>
+          <td class="small muted">{{ i.last_seen }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="small muted" style="margin-top:0.6rem">
+  Yearly figures use the standard number of cycles (12 monthly, 52 weekly), not the raw gap
+  between the charges seen — three payments 29 days apart would otherwise imply 12.6 a year
+  and overstate a bond repayment by thousands.
+</p>
+{% endif %}
+{% endblock %}

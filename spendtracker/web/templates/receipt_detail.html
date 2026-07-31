@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Receipt #{{ r.id }} · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Receipt #{{ r.id }}</h1>
+<p class="subtitle">{{ r.original_filename or 'uploaded slip' }} · read by
+  {{ r.extractor or 'nothing yet' }}{% if r.confidence is not none %}
+  ({{ (r.confidence * 100)|round|int }}% confidence){% endif %}</p>
+
+<div class="note {{ 'ok' if r.link_status in ('matched', 'cash_allocated') else ('plain' if r.link_status == 'ignored' else 'warn') }}">
+  <span class="icon" aria-hidden="true">{{ '✓' if r.link_status in ('matched', 'cash_allocated') else '!' }}</span>
+  <span><strong>{{ r.link_status.replace('_', ' ') }}</strong> — {{ r.match_reason or 'no reason recorded' }}</span>
+</div>
+
+<div class="two-col" style="margin-top:1rem">
+  <div>
+    <h2 style="margin-top:0">Correct the details</h2>
+    <div class="card">
+      <form method="post" action="{{ url_for('receipt_update', receipt_id=r.id) }}" class="stack">
+        <label>Merchant
+          <input type="text" name="merchant" value="{{ r.merchant_norm or r.merchant_raw or '' }}">
+        </label>
+        <label>Date
+          <input type="date" name="date" value="{{ r.receipt_date or '' }}">
+        </label>
+        <label>Total ({{ symbol }})
+          <input type="text" name="total"
+                 value="{{ '%.2f'|format(r.total_cents / 100) if r.total_cents is not none else '' }}"
+                 placeholder="289.92">
+        </label>
+        <label>Paid by
+          <select name="tender">
+            {% for t in ['unknown', 'card', 'cash', 'eft', 'voucher'] %}
+              <option value="{{ t }}" {{ 'selected' if r.tender_type == t }}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Category
+          {{ m.category_select('category', r.category, 'Leave unset') }}
+        </label>
+        <div class="row-actions">
+          <button type="submit" class="primary">Save and re-check the match</button>
+        </div>
+      </form>
+
+      <form method="post" action="{{ url_for('receipt_update', receipt_id=r.id) }}"
+            style="margin-top:0.7rem">
+        <input type="hidden" name="action" value="ignore">
+        <button type="submit" class="danger">Dismiss this slip</button>
+      </form>
+
+      <p class="small muted" style="margin-top:0.7rem">
+        Changing the total or date re-runs matching immediately. Setting <em>paid by</em> to
+        <strong>cash</strong> makes the app look for a cash withdrawal to allocate it
+        against instead of a card transaction.
+      </p>
+    </div>
+
+    {% if txn %}
+      <h2>Linked bank transaction</h2>
+      <div class="card">
+        <p style="margin:0"><strong>{{ txn.txn_date }}</strong> — {{ (-txn.amount_cents)|money }}</p>
+        <p class="small muted" style="margin:0.2rem 0 0">{{ txn.description_raw }}</p>
+        <p class="small" style="margin:0.4rem 0 0">
+          Category <strong>{{ txn.category }}</strong> ({{ txn.category_source }}) ·
+          <a href="{{ url_for('transactions', q=txn.merchant_norm) }}">see all from this merchant</a>
+        </p>
+        <p class="small muted" style="margin:0.5rem 0 0">
+          This slip does not add to your spending — the bank row above is the outflow. The
+          slip supplies the detail.
+        </p>
+      </div>
+    {% endif %}
+
+    {% if allocations %}
+      <h2>Paid from these cash withdrawals</h2>
+      <div class="card">
+        {% for a in allocations %}
+          <p style="margin:0 0 0.35rem">
+            <strong>{{ a.amount_cents|money }}</strong> of the
+            <a href="{{ url_for('transactions', q='withdrawal') }}">{{ a.txn_date }}</a>
+            withdrawal <span class="small muted">({{ a.description_raw }})</span>
+          </p>
+        {% endfor %}
+        <p class="small muted" style="margin-top:0.5rem">
+          The withdrawal was already counted when the bank showed it leaving. Allocating
+          this slip against it moves that amount into a real category instead of leaving it
+          as unexplained cash — the total does not change.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <h2 style="margin-top:0">The slip</h2>
+    {% if r.stored_path %}
+      <img class="slip-img" src="{{ url_for('receipt_image', receipt_id=r.id) }}"
+           alt="Photograph of receipt {{ r.id }}">
+    {% else %}
+      <div class="empty">The image file is no longer available.</div>
+    {% endif %}
+
+    {% if items %}
+      <h2>Line items</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Each</th><th class="num">Total</th></tr></thead>
+          <tbody>
+            {% for i in items %}
+              <tr>
+                <td>{{ i.description }}</td>
+                <td class="num">{{ i.quantity or '—' }}</td>
+                <td class="num">{{ i.unit_price_cents|money if i.unit_price_cents else '—' }}</td>
+                <td class="num">{{ i.line_total_cents|money if i.line_total_cents else '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="3">Line items add up to</th>
+              <th class="num">{{ items|sum(attribute='line_total_cents', start=0)|money }}</th>
+            </tr>
+            <tr>
+              <th colspan="3">Slip total reads</th>
+              <th class="num">{{ r.total_cents|money if r.total_cents is not none else '—' }}</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    {% endif %}
+
+    {% if r.raw_text %}
+      <details style="margin-top:1rem">
+        <summary class="small muted">Raw text read from the image</summary>
+        <pre class="small" style="white-space:pre-wrap; overflow-x:auto">{{ r.raw_text }}</pre>
+      </details>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

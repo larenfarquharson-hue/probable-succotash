@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spendtracker"
+version = "1.0.0"
+description = "Track every outflow on a bank account from statement CSVs and till slips, without double counting."
+requires-python = ">=3.10"
+# Nothing is required. Bank data stays on the machine and the tool stays
+# installable anywhere Python 3.10+ runs — including a locked-down work
+# laptop with no package index. Every feature that needs a third-party
+# library degrades to a clear message rather than an import error.
+dependencies = []
+
+[project.optional-dependencies]
+# The web interface: `spendtracker serve`. The CLI is complete without it.
+web = ["Flask>=3.0,<4.0"]
+# More forgiving date parsing for unusual bank exports. The built-in format
+# table handles ordinary files unaided.
+dates = ["python-dateutil>=2.8"]
+# AI-powered till-slip reading. Local tesseract and manual entry work without it.
+ai = ["anthropic>=0.40", "Pillow>=10.0"]
+all = ["Flask>=3.0,<4.0", "python-dateutil>=2.8", "anthropic>=0.40", "Pillow>=10.0"]
+dev = ["pytest>=8.0", "Flask>=3.0,<4.0"]
+
+[project.scripts]
+spendtracker = "spendtracker.cli:main"
+
+[tool.setuptools]
+packages = ["spendtracker", "spendtracker.ingest", "spendtracker.web"]
+
+[tool.setuptools.package-data]
+"spendtracker.web" = ["templates/*.html", "static/*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:spendtracker.*"]

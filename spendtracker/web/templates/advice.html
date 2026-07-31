@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Reduce spend · spendtracker{% endblock %}
+
+{% block content %}
+<h1>Where you could cut back</h1>
+<p class="subtitle">Ranked by how much they would save, with the assumption behind each
+  one stated. These are estimates, not measurements.</p>
+
+{{ m.period_bar(period, 'advice_page') }}
+
+<div class="tiles">
+  {{ m.tile('Spending now', (s.spend_cents / period.months)|int|money, 'per month', hero=True) }}
+  {{ m.tile('Could save', report.monthly_total_cents|money,
+            'per month — ' ~ (report.monthly_total_cents / monthly_spend)|pct0 ~ ' of spending') }}
+  {{ m.tile('Over a year', report.annual_total_cents|money, 'if every suggestion stuck') }}
+  {{ m.tile('Flagged as frivolous', report.frivolous_total_cents|money,
+            report.frivolous|length ~ ' transaction(s) in this period') }}
+</div>
+
+{% for note in report.notes %}
+  <div class="note plain" style="margin-top:0.7rem">
+    <span class="icon" aria-hidden="true">i</span><span class="small">{{ note }}</span>
+  </div>
+{% endfor %}
+
+<h2>Opportunities</h2>
+{% if not report.findings %}
+  <div class="note plain">
+    <span class="icon" aria-hidden="true">i</span>
+    <span>Nothing in this period stands out as clearly reducible. Either the spending is
+      mostly essential, or there is not enough data yet — a few months makes the patterns
+      much clearer.</span>
+  </div>
+{% endif %}
+
+{% for f in report.findings %}
+  <div class="finding">
+    <div class="finding-head">
+      <span class="title">{{ f.title }}</span>
+      <span class="save">{{ f.monthly_saving_cents|money }}/month</span>
+      <span class="badge {{ 'good' if f.difficulty == 'easy' else ('warn' if f.difficulty == 'moderate' else 'bad') }}">
+        {{ f.difficulty }} to change
+      </span>
+      <span class="badge">{{ f.confidence }} confidence</span>
+    </div>
+    <p>{{ f.detail }}</p>
+    <p class="assumption">{{ f.assumption }}
+      Worth {{ f.annual_saving_cents|money }} over a year.</p>
+    {% if f.evidence %}
+      <details>
+        <summary>What this is based on</summary>
+        <ul>{% for e in f.evidence[:12] %}<li>{{ e }}</li>{% endfor %}</ul>
+      </details>
+    {% endif %}
+    {% if f.categories %}
+      <p class="small muted">
+        {% for c in f.categories %}<a href="{{ url_for('transactions', category=c, period=period_arg) }}">{{ c }}</a>{{ ', ' if not loop.last }}{% endfor %}
+      </p>
+    {% endif %}
+  </div>
+{% endfor %}
+
+<h2>Transactions that look frivolous</h2>
+<div class="card">
+  <p class="small muted" style="margin-top:0">
+    Scored on the category, whether the merchant exists only for discretionary spend, and
+    how habitual the purchase is — many small buys at one place score higher than one
+    large considered purchase.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th class="num">Amount</th>
+        <th class="num">Score</th><th>Why</th></tr></thead>
+      <tbody>
+        {% for i in report.frivolous[:60] %}
+          <tr>
+            <td>{{ i.txn_date }}</td>
+            <td><a href="{{ url_for('merchant', name=i.merchant) }}">{{ i.merchant }}</a></td>
+            <td class="small">{{ i.category }}</td>
+            <td class="num">{{ i.amount_cents|money }}</td>
+            <td class="num">{{ '%.2f'|format(i.score) }}</td>
+            <td class="small muted">{{ i.reasons|join('; ') }}</td>
+          </tr>
+        {% endfor %}
+        {% if not report.frivolous %}
+          <tr><td colspan="6" class="muted">Nothing scored above the threshold.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

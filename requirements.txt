@@ -1,0 +1,23 @@
+# The core CLI needs nothing at all. This file installs the optional extras
+# so that a plain `pip install -r requirements.txt` gives you everything.
+#
+# Minimum install, no dependencies whatsoever:
+#     pip install -e .
+
+# Web interface: `spendtracker serve`
+Flask>=3.0,<4.0
+
+# Slightly more forgiving date parsing on unusual bank exports.
+# Without it the built-in format table handles ordinary files fine.
+python-dateutil>=2.8
+
+# AI-powered till-slip reading (OCR_PROVIDER=claude).
+# Local tesseract and manual entry work without it.
+anthropic>=0.40
+
+# Downscales oversized phone photos before sending them for reading,
+# which cuts the cost per slip. Skipped silently if absent.
+Pillow>=10.0
+
+# Dev/test only
+pytest>=8.0
