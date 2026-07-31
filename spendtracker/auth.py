@@ -334,26 +334,45 @@ class LoginThrottle:
 # ---------------------------------------------------------------------------
 
 
-def check_exposure(state: AuthState, host: str | None) -> None:
+def check_exposure(
+    state: AuthState, host: str | None, *, tls_ready: bool = False
+) -> None:
     """Raise unless it is safe to bind to ``host``.
 
     Called before the server starts. This is the whole point of the module: the
     unsafe configuration is unreachable rather than merely discouraged.
+
+    ``tls_ready`` only changes what the message says. Telling someone their
+    traffic will be unencrypted when they have already set up certificates
+    teaches them to distrust these warnings, and a warning nobody believes is
+    worse than none.
     """
     if is_loopback(host):
         return
 
     if not state.has_passphrase:
+        if tls_ready:
+            aside = (
+                "Certificates are already set up, so once a passphrase exists "
+                "the connection will be encrypted. This is still a single-user "
+                "local tool — keep it to a network you trust and off the "
+                "internet."
+            )
+        else:
+            aside = (
+                "Note that even with a passphrase the connection would not be "
+                "encrypted, so anyone able to watch your network could read the "
+                "traffic. Run `tls setup` to fix that. Either way, keep this to "
+                "a home network you trust, never a public or guest one, and do "
+                "not expose it to the internet."
+            )
         raise AuthError(
             f"refusing to serve on {host}: that is reachable from your network, "
             "and no passphrase is set.\n\n"
-            "    spendtracker passphrase\n\n"
-            "sets one. Until then the web UI stays on 127.0.0.1, where only this "
-            "machine can reach it.\n\n"
-            "Note that even with a passphrase the connection is not encrypted, "
-            "so anyone able to watch your network can read the traffic. Use "
-            "this on a home network you trust, never a public or guest one, "
-            "and do not expose it to the internet."
+            "    python3 -m spendtracker.cli passphrase\n\n"
+            "sets one (or just `spendtracker passphrase` if that is on your "
+            "PATH). Until then the web UI stays on 127.0.0.1, where only this "
+            "machine can reach it.\n\n" + aside
         )
 
     if not state.secret_key or state.secret_key == "dev-only-change-me":

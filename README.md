@@ -61,6 +61,10 @@ pip install -e '.[all]'    # all of the above
 spendtracker serve         # web UI on http://127.0.0.1:5000, needs [web]
 ```
 
+If `spendtracker` is not found after installing, the shortcut is not on your
+PATH. Everything works the same as `python3 -m spendtracker.cli <command>`; the
+docs below use the short form for readability.
+
 Why bother: bank statements are the last thing you want to hand to a machine
 you do not control, and "no dependencies" means this runs on a locked-down
 laptop with no package index. `tests/test_no_dependencies.py` enforces it.

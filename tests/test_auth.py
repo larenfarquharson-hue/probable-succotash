@@ -153,10 +153,29 @@ def test_exposing_without_a_passphrase_is_refused(tmp_path: Path) -> None:
         auth_mod.check_exposure(state, "0.0.0.0")
 
     message = str(exc.value)
-    assert "spendtracker passphrase" in message, "must say how to fix it"
-    assert "not" in message.lower() and "encrypt" in message.lower(), (
+    assert "spendtracker.cli passphrase" in message, "must say how to fix it"
+    assert "would not be" in message and "encrypted" in message, (
         "must disclose that traffic is unencrypted"
     )
+
+
+def test_the_warning_does_not_claim_cleartext_when_tls_is_ready(
+    tmp_path: Path,
+) -> None:
+    """A warning that is visibly wrong teaches the reader to ignore all of them.
+
+    Someone who has already run `tls setup` and is told their traffic will be
+    unencrypted learns that these messages are boilerplate. That is a worse
+    outcome than saying nothing.
+    """
+    state = auth_mod.load_auth(tmp_path)
+    with pytest.raises(auth_mod.AuthError) as exc:
+        auth_mod.check_exposure(state, "0.0.0.0", tls_ready=True)
+
+    message = str(exc.value)
+    assert "will be encrypted" in message
+    assert "would not be encrypted" not in message
+    assert "passphrase" in message, "the actual problem must still be stated"
 
 
 def test_exposing_with_a_passphrase_is_allowed(tmp_path: Path) -> None:

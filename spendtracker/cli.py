@@ -585,7 +585,9 @@ def cmd_serve(args, cfg: Config) -> int:
     # unsafe setup unreachable rather than merely discouraged.
     auth_state = auth_mod.load_auth(cfg.data_dir)
     try:
-        auth_mod.check_exposure(auth_state, host)
+        auth_mod.check_exposure(
+            auth_state, host, tls_ready=tls_mod.tls_paths(cfg.data_dir).ready
+        )
     except auth_mod.AuthError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 4
