@@ -139,7 +139,13 @@ def _where_it_went(report: PeriodReport, cur: str, w: int) -> list[str]:
             f"{_bar(bucket.total, largest, bar_cells)}{note}"
         )
     out.append(_rule("-", w))
-    out.append(f"{'Total (excluding transfers)':<28}{_money(total, cur):>13}")
+    out.append(f"{'Total categorised':<28}{_money(total, cur):>13}")
+    rec = report.reconciliation
+    left_out = round(rec.transfers + rec.excluded, 2)
+    if left_out:
+        out.append(f"  plus {_money(rec.transfers, cur)} transferred between your own "
+                   f"accounts and {_money(rec.excluded, cur)} you excluded,")
+        out.append(f"  giving the {_money(rec.total_out, cur)} total above.")
     out.append("")
     out.append("By group:")
     gtotal = sum(b.total for b in report.groups) or 1

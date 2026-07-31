@@ -194,6 +194,17 @@ class TestSlipDoubleCounting(DoubleCountingCase):
         self.assertEqual(len(report.over_cash), 1)
         self.assertEqual(self.outflows(), self.baseline)
 
+    def test_card_slip_never_matches_an_atm_withdrawal(self):
+        """Same amount and date is not enough: a slip is never *for* a withdrawal."""
+        self.add_slip(merchant="Some Shop", date="2026-06-04", total=1000.00,
+                      method="card")
+        report = matching.match_slips(self.conn)
+        self.assertEqual(len(report.matched), 0)
+        self.assertEqual(len(report.unmatched), 1)
+        withdrawal = self.conn.execute(
+            "SELECT category FROM transactions WHERE amount = -1000.0").fetchone()
+        self.assertEqual(withdrawal["category"], taxonomy.CASH)
+
     def test_unmatched_slip_is_reported_not_counted(self):
         self.add_slip(merchant="Somewhere Else", date="2026-06-20", total=1250.0,
                       method="card")

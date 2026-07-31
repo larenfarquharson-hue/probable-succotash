@@ -170,16 +170,22 @@ def _best_transaction(conn: sqlite3.Connection, slip: sqlite3.Row,
     # rounding, but never enough for a different purchase to sneak in.
     margin = max(cfg.slip_match_amount_tolerance, min(0.02 * total, 20.0))
 
+    # Cash withdrawals are excluded as candidates. A slip is never *for* a
+    # withdrawal — the withdrawal is how the cash was obtained — and without this
+    # a R2,000 card slip could latch onto a same-day R2,000 ATM draw purely on
+    # the strength of the amount and date agreeing.
     rows = conn.execute(
         "SELECT t.id, t.txn_date, t.description, t.description_key, t.amount,"
         "       t.merchant, t.category"
         "  FROM transactions t"
         " WHERE t.amount < 0 AND t.excluded = 0 AND t.is_internal = 0"
+        "   AND COALESCE(t.category, '') != ?"
         "   AND t.txn_date BETWEEN ? AND ?"
         "   AND ABS(ABS(t.amount) - ?) <= ?"
         "   AND t.id NOT IN (SELECT matched_txn_id FROM slips"
         "                     WHERE matched_txn_id IS NOT NULL AND status IN (?, ?))",
-        ((slip_day - window).isoformat(), (slip_day + window).isoformat(),
+        (taxonomy.CASH,
+         (slip_day - window).isoformat(), (slip_day + window).isoformat(),
          total, margin, STATUS_MATCHED, STATUS_MANUAL),
     ).fetchall()
 

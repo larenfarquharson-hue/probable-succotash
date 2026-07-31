@@ -256,9 +256,24 @@ def _categories(report: PeriodReport, cur: str) -> str:
 <div class="scroll"><table><thead><tr><th>Category</th><th class="num">Total</th>
 <th class="num">Count</th><th class="num">Share</th><th></th></tr></thead>
 <tbody>{''.join(rows)}</tbody>
-<tfoot><tr><td><strong>Total excluding transfers</strong></td>
+<tfoot><tr><td><strong>Total categorised</strong>{_e(_category_footnote(report, cur))}</td>
 <td class="num"><strong>{_m(total, cur)}</strong></td><td colspan="3"></td></tr></tfoot>
 </table></div>"""
+
+
+def _category_footnote(report: PeriodReport, cur: str) -> str:
+    """Explain the gap between the category table and the outflow total."""
+    rec = report.reconciliation
+    parts = []
+    if rec.transfers:
+        parts.append(f"{config.money(rec.transfers, cur)} transferred between your "
+                     f"own accounts")
+    if rec.excluded:
+        parts.append(f"{config.money(rec.excluded, cur)} you excluded")
+    if not parts:
+        return ""
+    return (" — plus " + " and ".join(parts)
+            + f", giving the {config.money(rec.total_out, cur)} that left the account")
 
 
 def _daily(report: PeriodReport, cur: str) -> str:

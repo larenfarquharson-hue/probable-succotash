@@ -265,6 +265,14 @@ class TestOverrides(AnalysisCase):
         self.assertEqual(report.reconciliation.consumption, 500.0)
         self.assertTrue(report.reconciliation.balances)
 
+        # The category table shows what was categorised; the reports must explain
+        # the gap to the outflow total rather than mislabel it.
+        self.assertEqual(round(sum(b.total for b in report.categories), 2), 500.0)
+        text = report_text.render(report)
+        self.assertIn("Total categorised", text)
+        self.assertIn("you excluded", text)
+        self.assertIn("you excluded", report_html.render(report))
+
 
 class TestUndoImport(AnalysisCase):
     def test_undo_removes_exactly_what_it_added(self):
